@@ -107,6 +107,7 @@ Since the SDK path varies by machine, the .vscode/launch.json file is ignored in
 
 **Template for .vscode/launch.json:**
 
+```json
 {  
     "version": "0.2.0",  
     "configurations": \[  
@@ -132,7 +133,7 @@ Since the SDK path varies by machine, the .vscode/launch.json file is ignored in
         }  
     \]  
 }
-
+```
 **Critical Configuration Note:**
 
 * **runtimeExecutable:** You MUST replace C:\\\\AIR\\\\SDK\\\\AIRSDK\_51.2.2\\\\bin\\\\adl.exe with the actual absolute path to the adl.exe file on your specific machine.  
