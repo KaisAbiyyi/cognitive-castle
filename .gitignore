@@ -1,0 +1,25 @@
+# --- Build Outputs (Hasil Compile) ---
+# Kita hanya mau source code, bukan hasil jadinya.
+bin/*.swf
+bin/*.apk
+bin/*.exe
+bin/*.tmp
+bin-debug/
+bin-release/
+
+# --- VS Code Settings (PENTING UNTUK TIM) ---
+# Karena launch.json berisi path absolut ke SDK komputer Kais,
+# file ini TIDAK BOLEH di-share via Git. Setiap orang harus setting sendiri.
+.vscode/
+
+# --- ActionScript / Adobe AIR Metadata ---
+# File sementara yang kadang dibuat compiler
+*.cache
+*.tmp
+
+# --- System Files (Sampah OS) ---
+.DS_Store
+Thumbs.db
+
+# --- Local History (Jika ada extension local history) ---
+.history/

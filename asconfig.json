@@ -1,0 +1,11 @@
+{
+    "config": "airmobile",
+    "compilerOptions": {
+        "source-path": [
+            "src"
+        ],
+        "output": "bin/CognitiveCastle.swf"
+    },
+    "application": "CognitiveCastle-app.xml",
+    "mainClass": "Main" 
+}

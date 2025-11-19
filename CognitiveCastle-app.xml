@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<application xmlns="http://ns.adobe.com/air/application/32.0">
+    <id>com.soramula.cognitivecastle</id>
+    <filename>CognitiveCastle</filename>
+    <name>Cognitive Castle</name>
+    <versionNumber>1.0.0</versionNumber>
+
+    <initialWindow>
+        <content>bin/CognitiveCastle.swf</content>
+        <visible>true</visible>
+        <fullScreen>true</fullScreen>
+        <autoOrients>true</autoOrients>
+        <aspectRatio>landscape</aspectRatio> <renderMode>direct</renderMode>      </initialWindow>
+
+    <android>
+        <manifestAdditions><![CDATA[
+            <manifest android:installLocation="auto">
+                <uses-permission android:name="android.permission.INTERNET"/>
+                <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+            </manifest>
+        ]]></manifestAdditions>
+    </android>
+
+    <icon></icon>
+</application>
