@@ -25,10 +25,10 @@ Goal: Functional prototype where users can receive stimulus and input answers.
 
 **Objective:** Initialize AS3 project and configure development environment.
 
-- \[ \] **T1-001** (Kais): Initialize Git repository, setup .gitignore, and configure asconfig.json for AIR Mobile & Desktop targets.
-- \[ \] **T1-002** (Nazar): Setup folder structure (src, assets, bin) and create base "Main" Sprite with responsive scaling logic (StageScaleMode.NO_SCALE).
-- \[ \] **T1-003** (Jarwo): Create basic "Debugger" UI overlay to display FPS and Memory usage for performance monitoring.
-- \[ \] **T1-004** (Kais): Configure launch.json in VS Code for dual-target debugging (Android Nexus & Windows Desktop).
+- [x] **T1-001** (Kais): Initialize Git repository, setup .gitignore, and configure asconfig.json for AIR Mobile & Desktop targets.
+- [x] **T1-002** (Kais): Setup folder structure (src, assets, bin) and create base "Main" Sprite with responsive scaling logic (StageScaleMode.NO_SCALE).
+- [x] **T1-003** (Kais): Create basic "Debugger" UI overlay to display FPS and Memory usage for performance monitoring.
+- [x] **T1-004** (Kais): Configure launch.json in VS Code for dual-target debugging (Android Nexus & Windows Desktop).
 
 ### **Branch: feature/core-gameplay-loop/week-1**
 

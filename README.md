@@ -293,6 +293,7 @@ Due to legacy tooling dependencies, a pure AIR SDK installation may cause pathin
 Since the SDK path varies by machine, the .vscode/launch.json file is ignored in git. You must create this file manually in your local environment to enable debugging.
 
 **Template for .vscode/launch.json:**
+```json
 
 {  
     "version": "0.2.0",  
@@ -319,6 +320,7 @@ Since the SDK path varies by machine, the .vscode/launch.json file is ignored in
         }  
     \]  
 }
+```
 
 **Critical Configuration Note:**
 
