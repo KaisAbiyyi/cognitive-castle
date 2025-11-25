@@ -70,17 +70,21 @@ package game {
         }
 
         /**
-         * Convert InputAction vector to StimulusItem sequence
-         * @param input User input stimulus IDs
-         * @param correctSequence Correct sequence for reference
-         * @return Vector of StimulusItem
+         * Convert user input indices to StimulusItem sequence
+         * @param input User input (button indices that were clicked: 0, 1, 2, etc.)
+         * @param correctSequence Correct sequence that was displayed
+         * @return Vector of StimulusItem representing user's answer
          */
         private function convertInputToSequence(input:Vector.<int>, correctSequence:Vector.<StimulusItem>):Vector.<StimulusItem> {
             var sequence:Vector.<StimulusItem> = new Vector.<StimulusItem>();
 
-            for each (var stimulusId:int in input) {
-                if (stimulusId >= 0 && stimulusId < correctSequence.length) {
-                    sequence.push(correctSequence[stimulusId]);
+            // User input contains button indices (0, 1, 2, etc.)
+            // Each index should map to the item at that position in the displayed sequence
+            // E.g., if user clicked buttons [0, 1], they're recalling items at index 0 and 1
+            for each (var buttonIndex:int in input) {
+                if (buttonIndex >= 0 && buttonIndex < correctSequence.length) {
+                    // Get the item that was at this position in the sequence
+                    sequence.push(correctSequence[buttonIndex]);
                 }
             }
 

@@ -51,6 +51,8 @@ package game {
         private var _userInput:Vector.<int>;
         private var _isCorrect:Boolean;
         private var _trialCount:int = 0;
+        private var _currentStimulusIndex:int = 0; // Track which stimulus is being shown
+        private var _stimulusTimer:Timer; // Timer for stimulus presentation
 
         // UI Components
         private var _nextTrialButton:SimpleButton;
@@ -292,41 +294,70 @@ package game {
             _currentSequence = _sequenceGenerator.generateSequence(_hud.getLevel());
             _hud.setSpan(_currentSequence.length);
 
-            // TODO: Show stimulus sequence using StimulusView
-            // For now, simulate with timer
-            var stimulusTimer:Timer = new Timer(1000, _currentSequence.length);
-            stimulusTimer.addEventListener(TimerEvent.TIMER, onStimulusTick);
-            stimulusTimer.addEventListener(TimerEvent.TIMER_COMPLETE, onStimulusComplete);
-            stimulusTimer.start();
-
             if (DEBUG) {
-                trace("Showing sequence: " + _currentSequence.length + " items");
+                trace("========== STIMULUS PHASE ==========");
+                trace("Generated sequence: " + _currentSequence.length + " items");
+                var seqIds:Array = [];
+                for each (var debugItem:StimulusItem in _currentSequence) {
+                    seqIds.push(debugItem.id);
+                }
+                trace("Sequence IDs: " + seqIds.join(", "));
+                trace("====================================");
+            }
+
+            // Show first stimulus immediately
+            _currentStimulusIndex = 0;
+            showCurrentStimulus();
+            
+            // Set timer for next stimuli (1.5 seconds per item)
+            _stimulusTimer = new Timer(1500);
+            _stimulusTimer.addEventListener(TimerEvent.TIMER, onStimulusTick);
+            _stimulusTimer.start();
+            
+            if (DEBUG) {
+                trace("Stimulus timer started - 1.5s interval");
             }
         }
 
         /**
-         * Handle stimulus tick (placeholder)
+         * Show current stimulus item
          */
-        private function onStimulusTick(event:TimerEvent):void {
-            var index:int = event.currentTarget.currentCount - 1;
-            if (index < _currentSequence.length) {
-                // Show stimulus number (Week 1 placeholder - just show the ID)
-                var item:StimulusItem = _currentSequence[index];
+        private function showCurrentStimulus():void {
+            if (_currentStimulusIndex < _currentSequence.length) {
+                var item:StimulusItem = _currentSequence[_currentStimulusIndex];
                 _stimulusDisplay.text = String(item.id + 1); // Show 1-indexed
                 _stimulusDisplay.visible = true;
                 
                 if (DEBUG) {
-                    trace("Stimulus " + index + ": " + item.toString());
+                    trace("Showing stimulus " + (_currentStimulusIndex + 1) + "/" + _currentSequence.length + ": ID=" + item.id + " (display: " + (item.id + 1) + ")");
                 }
             }
         }
 
         /**
-         * Handle stimulus complete
+         * Handle stimulus tick - advance to next stimulus or complete
          */
-        private function onStimulusComplete(event:TimerEvent):void {
-            _stimulusDisplay.visible = false;
-            enterState(STATE_INPUT);
+        private function onStimulusTick(event:TimerEvent):void {
+            _currentStimulusIndex++;
+            
+            if (_currentStimulusIndex < _currentSequence.length) {
+                // Show next stimulus
+                showCurrentStimulus();
+            } else {
+                // All stimuli shown, move to input phase
+                if (_stimulusTimer) {
+                    _stimulusTimer.stop();
+                    _stimulusTimer.removeEventListener(TimerEvent.TIMER, onStimulusTick);
+                    _stimulusTimer = null;
+                }
+                _stimulusDisplay.visible = false;
+                
+                if (DEBUG) {
+                    trace("All " + _currentSequence.length + " stimuli shown, moving to INPUT");
+                }
+                
+                enterState(STATE_INPUT);
+            }
         }
 
         /**
@@ -340,8 +371,14 @@ package game {
             _userInputDisplay.text = "Your input: ";
             _userInputDisplay.visible = true;
 
+            if (DEBUG) {
+                trace("onEnterInput - Sequence length: " + _currentSequence.length);
+                trace("Showing " + _currentSequence.length + " input buttons");
+            }
+
             // Start input collection with callback for each button click
-            _inputManager.startInputPhase(onInputReceived, onInputTimeout, 10000, onButtonClicked);
+            // Only show buttons matching the sequence length
+            _inputManager.startInputPhase(onInputReceived, onInputTimeout, 10000, onButtonClicked, _currentSequence.length);
         }
 
         /**
