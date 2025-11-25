@@ -22,12 +22,12 @@ Primary owners: **Kais**, **Nazar**
 
 ### 2. Stimulus Presentation (View & Timing)
 
-- [ ] Define visual style for symbols (shapes, colors) aligned with PRD constraints (color + shape, no color-only cues) _(Nazar)_
-- [ ] Implement `StimulusView` class to render a queue of items sequentially in the center of the screen _(Nazar)_
-- [ ] Implement configurable timing constants (show duration, inter-stimulus interval) as shared config values _(Nazar)_
-- [ ] Ensure stimulus phase **disables** input (HUD and input area hidden or locked) _(Nazar)_
-- [ ] Add simple transition/animation (fade in/out) between items to reduce visual noise _(Nazar)_
-- [ ] Add dev-only overlay to show current index / total items during playback _(Nazar)_
+- [x] Define visual style for symbols (shapes, colors) aligned with PRD constraints (color + shape, no color-only cues) _(Nazar)_
+- [x] Implement `StimulusView` class to render a queue of items sequentially in the center of the screen _(Nazar)_
+- [x] Implement configurable timing constants (show duration, inter-stimulus interval) as shared config values _(Nazar)_
+- [x] Ensure stimulus phase **disables** input (HUD and input area hidden or locked) _(Nazar)_
+- [x] Add simple transition/animation (fade in/out) between items to reduce visual noise _(Nazar)_
+- [x] Add dev-only overlay to show current index / total items during playback _(Nazar)_
 
 ### 3. Cross-Platform Input Handling
 
