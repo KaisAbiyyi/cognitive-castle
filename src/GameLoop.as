@@ -22,10 +22,10 @@ package {
 
         /**
          * Process a complete trial
-         * @param userInput User's input actions
+         * @param userInput User's input stimulus IDs
          * @param correctSequence The correct sequence
          */
-        public function processTrial(userInput:Vector.<InputAction>, correctSequence:Vector.<StimulusItem>):void {
+        public function processTrial(userInput:Vector.<int>, correctSequence:Vector.<StimulusItem>):void {
             var result:ValidationResult = _validator.validate(userInput, correctSequence);
             _scoreManager.updateScore(result.isCorrect);
             _scoreManager.logTrialResult(result);

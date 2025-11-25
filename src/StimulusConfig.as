@@ -10,16 +10,27 @@ package {
         public static const INTER_STIMULUS_INTERVAL:int = 500; // Pause between stimuli
         public static const POST_SEQUENCE_PAUSE:int = 1000;   // Pause after sequence before input phase
 
-        // Visual constants
-        public static const STIMULUS_SIZE:int = 100;         // Size of stimulus symbols
-        public static const CENTER_X:int = 400;              // Center X position (will be dynamic)
-        public static const CENTER_Y:int = 300;              // Center Y position (will be dynamic)
-
-        // Animation constants
-        public static const FADE_IN_DURATION:int = 200;      // Fade in time
-        public static const FADE_OUT_DURATION:int = 200;     // Fade out time
+        // Dynamic visual constants (will be set based on stage size)
+        private static var _centerX:int = 400;
+        private static var _centerY:int = 300;
+        private static var _stimulusSize:int = 100;
 
         // Debug overlay
         public static const SHOW_DEBUG_OVERLAY:Boolean = true; // Show index/total during playback
+
+        /**
+         * Update constants based on stage dimensions
+         * @param stageWidth Stage width
+         * @param stageHeight Stage height
+         */
+        public static function updateForStageSize(stageWidth:int, stageHeight:int):void {
+            _centerX = stageWidth / 2;
+            _centerY = stageHeight / 2;
+            _stimulusSize = Math.min(stageWidth, stageHeight) / 8; // Adaptive size
+        }
+
+        public static function get CENTER_X():int { return _centerX; }
+        public static function get CENTER_Y():int { return _centerY; }
+        public static function get STIMULUS_SIZE():int { return _stimulusSize; }
     }
 }
