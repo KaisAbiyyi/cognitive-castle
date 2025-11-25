@@ -30,11 +30,11 @@ package {
 
         /**
          * Validate user input against correct sequence
-         * @param userInput Vector of InputAction from user
+         * @param userInput Vector of stimulus IDs from user
          * @param correctSequence Vector of StimulusItem (correct sequence)
          * @return ValidationResult
          */
-        public function validate(userInput:Vector.<InputAction>, correctSequence:Vector.<StimulusItem>):ValidationResult {
+        public function validate(userInput:Vector.<int>, correctSequence:Vector.<StimulusItem>):ValidationResult {
             // Convert InputAction to StimulusItem sequence
             var userSequence:Vector.<StimulusItem> = convertInputToSequence(userInput, correctSequence);
 
@@ -63,16 +63,16 @@ package {
 
         /**
          * Convert InputAction vector to StimulusItem sequence
-         * @param input User input actions
+         * @param input User input stimulus IDs
          * @param correctSequence Correct sequence for reference
          * @return Vector of StimulusItem
          */
-        private function convertInputToSequence(input:Vector.<InputAction>, correctSequence:Vector.<StimulusItem>):Vector.<StimulusItem> {
+        private function convertInputToSequence(input:Vector.<int>, correctSequence:Vector.<StimulusItem>):Vector.<StimulusItem> {
             var sequence:Vector.<StimulusItem> = new Vector.<StimulusItem>();
 
-            for each (var action:InputAction in input) {
-                if (action.type == InputAction.CLICK && action.stimulusId >= 0 && action.stimulusId < correctSequence.length) {
-                    sequence.push(correctSequence[action.stimulusId]);
+            for each (var stimulusId:int in input) {
+                if (stimulusId >= 0 && stimulusId < correctSequence.length) {
+                    sequence.push(correctSequence[stimulusId]);
                 }
             }
 

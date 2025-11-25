@@ -57,10 +57,10 @@ Primary owners: **Kais**, **Nazar**
 
 ### 6. Integration & Platform Checks
 
-- [ ] Integrate all new classes into `Main.as` entry flow without breaking existing environment-init logic _(Nazar)_
-- [ ] Verify input and stimulus timing on **Windows desktop** build (mouse) _(Nazar)_
-- [ ] Verify input and stimulus timing on **Android** target (touch) using ADL or device build _(Nazar)_
-- [ ] Adjust constants (durations, spacing, sizes) to look acceptable on both aspect ratios _(Nazar)_
+- [x] Integrate all new classes into `Main.as` entry flow without breaking existing environment-init logic _(Nazar)_
+- [x] Verify input and stimulus timing on **Windows desktop** build (mouse) _(Nazar)_
+- [x] Verify input and stimulus timing on **Android** target (touch) using ADL or device build _(Nazar)_
+- [x] Adjust constants (durations, spacing, sizes) to look acceptable on both aspect ratios _(Nazar)_
 
 ### 7. Documentation & Cleanup
 
