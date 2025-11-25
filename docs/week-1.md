@@ -13,12 +13,12 @@ Primary owners: **Kais**, **Nazar**
 
 ### 1. Sequence Generation Logic
 
-- [ ] Design sequence difficulty tiers (symbol pool, length curve, color variation) _(Nazar, support: Kais)_
-- [ ] Define data structure for a single stimulus item (e.g. `{id, type, color, value}`) _(Kais)_
-- [ ] Implement `SequenceGenerator` class skeleton with public API (e.g. `generateSequence(difficultyLevel:int):Vector.<StimulusItem>`) _(Nazar)_
-- [ ] Add randomness rules (no immediate triple repetition, min/max length per tier) _(Nazar)_
-- [ ] Hook generator difficulty input to a simple `currentLevel` or `spanLength` variable (non-adaptive placeholder) _(Nazar)_
-- [ ] Add unit-style test harness or debug screen log to verify generated sequences visually in dev build _(Nazar)_
+- [x] Design sequence difficulty tiers (symbol pool, length curve, color variation) _(Kais)_
+- [x] Define data structure for a single stimulus item (e.g. `{id, type, color, value}`) _(Kais)_
+- [x] Implement `SequenceGenerator` class skeleton with public API (e.g. `generateSequence(difficultyLevel:int):Vector.<StimulusItem>`) _(Kais)_
+- [x] Add randomness rules (no immediate triple repetition, min/max length per tier) _(Kais)_
+- [x] Hook generator difficulty input to a simple `currentLevel` or `spanLength` variable (non-adaptive placeholder) _(Kais)_
+- [x] Add unit-style test harness or debug screen log to verify generated sequences visually in dev build _(Kais)_
 
 ### 2. Stimulus Presentation (View & Timing)
 
@@ -31,12 +31,12 @@ Primary owners: **Kais**, **Nazar**
 
 ### 3. Cross-Platform Input Handling
 
-- [ ] Design unified input event model that abstracts Touch vs Mouse into a single semantic event (e.g. `InputAction`) _(Nazar)_
+- [ ] Design unified input event model that abstracts Touch vs Mouse into a single semantic event (e.g. `InputAction`) _(Kais)_
 - [ ] Implement `InputManager` class with handlers for `MouseEvent.CLICK` and `TouchEvent.TOUCH_BEGIN` _(Kais)_
-- [ ] Map on-screen buttons / tiles to logical stimulus IDs (e.g. by `name`, `id`, or `customData`) _(Nazar)_
-- [ ] Add visual feedback states for input widgets (pressed, released, disabled) _(Nazar)_
+- [ ] Map on-screen buttons / tiles to logical stimulus IDs (e.g. by `name`, `id`, or `customData`) _(Kais)_
+- [ ] Add visual feedback states for input widgets (pressed, released, disabled) _(Kais)_
 - [ ] Implement input buffer collection (`Vector.<StimulusItem>` or `Vector.<int>`) while user is answering _(Kais)_
-- [ ] Add timeout handling for user response (simple fixed timer; if expired, treat as incorrect) _(Nazar)_
+- [ ] Add timeout handling for user response (simple fixed timer; if expired, treat as incorrect) _(Kais)_
 
 ### 4. Validation & Result Handling
 
@@ -49,10 +49,10 @@ Primary owners: **Kais**, **Nazar**
 
 ### 5. Basic HUD & Game Loop Orchestration
 
-- [ ] Implement minimal HUD component showing **Score**, **Current Level/Span**, and basic instructions _(Nazar)_
-- [ ] Add "Ready / Observe / Answer" state text to guide user phase-by-phase _(Nazar)_
-- [ ] Implement simple finite state machine in `Main` (or controller class) for phases: `IDLE -> STIMULUS -> INPUT -> RESULT -> NEXT` _(Nazar)_
-- [ ] Wire HUD updates to FSM transitions (e.g. highlight active phase) _(Nazar)_
+- [ ] Implement minimal HUD component showing **Score**, **Current Level/Span**, and basic instructions _(Kais)_
+- [ ] Add "Ready / Observe / Answer" state text to guide user phase-by-phase _(Kais)_
+- [ ] Implement simple finite state machine in `Main` (or controller class) for phases: `IDLE -> STIMULUS -> INPUT -> RESULT -> NEXT` _(Kais)_
+- [ ] Wire HUD updates to FSM transitions (e.g. highlight active phase) _(Kais)_
 - [ ] Add a basic "Next Trial" button or auto-advance delay after result display _(Kais)_
 
 ### 6. Integration & Platform Checks
@@ -60,10 +60,10 @@ Primary owners: **Kais**, **Nazar**
 - [ ] Integrate all new classes into `Main.as` entry flow without breaking existing environment-init logic _(Nazar)_
 - [ ] Verify input and stimulus timing on **Windows desktop** build (mouse) _(Nazar)_
 - [ ] Verify input and stimulus timing on **Android** target (touch) using ADL or device build _(Nazar)_
-- [ ] Adjust constants (durations, spacing, sizes) to look acceptable on both aspect ratios _(Nazar, support: Kais)_
+- [ ] Adjust constants (durations, spacing, sizes) to look acceptable on both aspect ratios _(Nazar)_
 
 ### 7. Documentation & Cleanup
 
-- [ ] Update `DEVELOPMENT_PLAN.md` status for Week 1 core gameplay tasks after completion _(Nazar)_
+- [ ] Update `DEVELOPMENT_PLAN.md` status for Week 1 core gameplay tasks after completion _(Kais)_
 - [ ] Add inline developer notes (short) in core classes explaining public APIs and expected usage _(Kais)_
-- [ ] Ensure no debug-only assets or logs ship in release configuration (guard with flags or simple `if (DEBUG)`) _(Nazar)_
+- [ ] Ensure no debug-only assets or logs ship in release configuration (guard with flags or simple `if (DEBUG)`) _(Kais)_
