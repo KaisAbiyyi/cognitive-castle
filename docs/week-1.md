@@ -31,12 +31,12 @@ Primary owners: **Kais**, **Nazar**
 
 ### 3. Cross-Platform Input Handling
 
-- [ ] Design unified input event model that abstracts Touch vs Mouse into a single semantic event (e.g. `InputAction`) _(Kais)_
-- [ ] Implement `InputManager` class with handlers for `MouseEvent.CLICK` and `TouchEvent.TOUCH_BEGIN` _(Kais)_
-- [ ] Map on-screen buttons / tiles to logical stimulus IDs (e.g. by `name`, `id`, or `customData`) _(Kais)_
-- [ ] Add visual feedback states for input widgets (pressed, released, disabled) _(Kais)_
-- [ ] Implement input buffer collection (`Vector.<StimulusItem>` or `Vector.<int>`) while user is answering _(Kais)_
-- [ ] Add timeout handling for user response (simple fixed timer; if expired, treat as incorrect) _(Kais)_
+- [x] Design unified input event model that abstracts Touch vs Mouse into a single semantic event (e.g. `InputAction`) _(Kais)_
+- [x] Implement `InputManager` class with handlers for `MouseEvent.CLICK` and `TouchEvent.TOUCH_BEGIN` _(Kais)_
+- [x] Map on-screen buttons / tiles to logical stimulus IDs (e.g. by `name`, `id`, or `customData`) _(Kais)_
+- [x] Add visual feedback states for input widgets (pressed, released, disabled) _(Kais)_
+- [x] Implement input buffer collection (`Vector.<StimulusItem>` or `Vector.<int>`) while user is answering _(Kais)_
+- [x] Add timeout handling for user response (simple fixed timer; if expired, treat as incorrect) _(Kais)_
 
 ### 4. Validation & Result Handling
 
