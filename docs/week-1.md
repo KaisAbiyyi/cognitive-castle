@@ -40,12 +40,12 @@ Primary owners: **Kais**, **Nazar**
 
 ### 4. Validation & Result Handling
 
-- [ ] Implement `Validator` class or function to compare generated sequence vs user input (order-sensitive) _(Nazar)_
-- [ ] Support multiple validation modes: forward recall (week-1 focus), reverse recall and sort (basic stubs only) _(Nazar)_
-- [ ] Add result object structure (e.g. `{isCorrect:Boolean, errors:int, accuracy:Number}`) _(Nazar)_
-- [ ] Integrate validation into main loop: Stimulus -> Input -> Validate -> Result callback _(Nazar)_
-- [ ] Define simple scoring rule (e.g. +1 correct trial, 0 on fail) and update score variable _(Nazar)_
-- [ ] Log each trial result to console / debug overlay for tuning _(Nazar)_
+- [x] Implement `Validator` class or function to compare generated sequence vs user input (order-sensitive) _(Nazar)_
+- [x] Support multiple validation modes: forward recall (week-1 focus), reverse recall and sort (basic stubs only) _(Nazar)_
+- [x] Add result object structure (e.g. `{isCorrect:Boolean, errors:int, accuracy:Number}`) _(Nazar)_
+- [x] Integrate validation into main loop: Stimulus -> Input -> Validate -> Result callback _(Nazar)_
+- [x] Define simple scoring rule (e.g. +1 correct trial, 0 on fail) and update score variable _(Nazar)_
+- [x] Log each trial result to console / debug overlay for tuning _(Nazar)_
 
 ### 5. Basic HUD & Game Loop Orchestration
 
