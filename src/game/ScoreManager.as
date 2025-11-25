@@ -1,7 +1,14 @@
-package {
+package game {
+
+    import domain.ValidationResult;
 
     /**
      * ScoreManager - Manages scoring rules and score tracking.
+     *
+     * SOLID Principles:
+     * - Single Responsibility: Only handles scoring logic
+     * - Open/Closed: Can be extended with new scoring rules without changing existing code
+     * - Interface Segregation: Provides focused scoring methods
      */
     public class ScoreManager {
 

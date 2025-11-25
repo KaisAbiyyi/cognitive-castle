@@ -1,8 +1,13 @@
-package {
+package domain {
 
     /**
      * StimulusItem - Represents a single item in the sequence challenge.
      * Contains visual properties for display and logical ID for validation.
+     *
+     * SOLID Principles:
+     * - Single Responsibility: Only holds stimulus data and validation
+     * - Open/Closed: Can be extended with new properties without changing existing code
+     * - Liskov Substitution: Can be used anywhere StimulusItem is expected
      */
     public class StimulusItem {
 

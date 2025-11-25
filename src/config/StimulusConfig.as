@@ -1,12 +1,17 @@
-package {
+package config {
 
     /**
      * StimulusConfig - Configuration constants for stimulus presentation timing and visuals.
+     *
+     * SOLID Principles:
+     * - Single Responsibility: Only provides configuration data
+     * - Open/Closed: Can be extended with new configurations without changing existing code
+     * - Interface Segregation: Provides only configuration-related constants
      */
     public class StimulusConfig {
 
         // Timing constants (in milliseconds)
-        public static const SHOW_DURATION:int = 1000;        // How long each stimulus is shown
+        public static const SHOW_DURATION:int = 800;         // How long each stimulus is shown (800ms per PRD)
         public static const INTER_STIMULUS_INTERVAL:int = 500; // Pause between stimuli
         public static const POST_SEQUENCE_PAUSE:int = 1000;   // Pause after sequence before input phase
 

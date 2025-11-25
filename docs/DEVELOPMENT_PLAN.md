@@ -34,11 +34,11 @@ Goal: Functional prototype where users can receive stimulus and input answers.
 
 **Objective:** Implement the Sequence Challenge and Validation logic.
 
-- \[ \] **T1-005** (Jarwo): Develop SequenceGenerator class to create random arrays of symbols/colors based on difficulty level.
-- \[ \] **T1-006** (Nazar): Develop StimulusView component to render the sequence items (Shapes/Colors) with precise timing (800ms duration).
-- \[ \] **T1-007** (Kais): Implement InputManager class to handle both Touch (Android) and Mouse (Windows) events consistently.
-- \[ \] **T1-008** (Jarwo): Implement Validator logic to compare User Input vs Generated Sequence and return Boolean result.
-- \[ \] **T1-009** (Nazar): Develop Basic HUD (Heads-Up Display) showing current Score and Level.
+- [x] **T1-005** (Jarwo): Develop SequenceGenerator class to create random arrays of symbols/colors based on difficulty level.
+- [x] **T1-006** (Nazar): Develop StimulusView component to render the sequence items (Shapes/Colors) with precise timing (800ms duration).
+- [x] **T1-007** (Kais): Implement InputManager class to handle both Touch (Android) and Mouse (Windows) events consistently.
+- [x] **T1-008** (Jarwo): Implement Validator logic to compare User Input vs Generated Sequence and return Boolean result.
+- [x] **T1-009** (Nazar): Develop Basic HUD (Heads-Up Display) showing current Score and Level.
 
 ## **Week 2: Procedural Castle & Adaptive Progression**
 

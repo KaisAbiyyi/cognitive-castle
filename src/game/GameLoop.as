@@ -1,8 +1,16 @@
-package {
+package game {
+
+    import domain.StimulusItem;
+    import domain.ValidationResult;
 
     /**
      * GameLoop - Simple integration of validation into main loop.
      * Handles Stimulus -> Input -> Validate -> Result flow.
+     *
+     * SOLID Principles:
+     * - Single Responsibility: Only orchestrates game loop flow
+     * - Open/Closed: Can be extended with new loop phases without changing existing code
+     * - Dependency Inversion: Depends on abstractions (Validator, ScoreManager)
      */
     public class GameLoop {
 

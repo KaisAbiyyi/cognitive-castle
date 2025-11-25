@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
-<application xmlns="http://ns.adobe.com/air/application/32.0">
+<application xmlns="http://ns.adobe.com/air/application/51.2">
     <id>com.soramula.cognitivecastle</id>
     <filename>CognitiveCastle</filename>
     <name>Cognitive Castle</name>
@@ -8,9 +8,13 @@
     <initialWindow>
         <content>bin/CognitiveCastle.swf</content>
         <visible>true</visible>
-        <fullScreen>true</fullScreen>
+        <width>1280</width>
+        <height>720</height>
+        <fullScreen>false</fullScreen>
         <autoOrients>true</autoOrients>
-        <aspectRatio>landscape</aspectRatio> <renderMode>direct</renderMode>      </initialWindow>
+        <aspectRatio>landscape</aspectRatio>
+        <renderMode>direct</renderMode>
+    </initialWindow>
 
     <android>
         <manifestAdditions><![CDATA[

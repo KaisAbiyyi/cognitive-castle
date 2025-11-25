@@ -1,4 +1,4 @@
-package {
+package ui {
 
     import flash.display.Sprite;
     import flash.display.Shape;
@@ -7,10 +7,17 @@ package {
     import flash.utils.Timer;
     import flash.events.TimerEvent;
     import flash.events.Event;
+    import config.StimulusConfig;
+    import domain.StimulusItem;
 
     /**
      * StimulusView - Handles the visual presentation of stimulus sequences.
      * Renders items sequentially in the center of the screen with timing controls.
+     *
+     * SOLID Principles:
+     * - Single Responsibility: Only handles stimulus presentation and rendering
+     * - Open/Closed: Can be extended with new animation types without changing existing code
+     * - Dependency Inversion: Depends on abstractions (StimulusConfig, StimulusItem)
      */
     public class StimulusView extends Sprite {
 
