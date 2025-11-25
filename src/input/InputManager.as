@@ -43,6 +43,7 @@ package input {
         // Input state
         private var _isInputEnabled:Boolean = false;
         private var _inputStartTime:uint;
+        private var _expectedInputLength:int = -1; // Expected number of inputs (-1 = no limit)
 
         // Visual feedback - map of display objects to their states
         private var _buttonStates:Object; // stimulusId -> {normal, pressed, disabled}
@@ -162,6 +163,7 @@ package input {
             _timeoutDuration = timeoutMs;
             _isInputEnabled = true;
             _inputStartTime = getTimer();
+            _expectedInputLength = numButtonsToShow; // Store expected length for auto-submit
 
             // Show input buttons (only show as many as needed)
             showButtons(numButtonsToShow);
@@ -364,8 +366,13 @@ package input {
                     _onButtonClick(_inputBuffer);
                 }
 
-                // Auto-submit on buffer full or implement manual submit logic
-                // For now, continue collecting until timeout or explicit submit
+                // Auto-submit when buffer reaches expected length
+                if (_expectedInputLength > 0 && _inputBuffer.length >= _expectedInputLength) {
+                    if (DEBUG) {
+                        trace("Buffer full (" + _inputBuffer.length + "/" + _expectedInputLength + "), auto-submitting...");
+                    }
+                    submitInput();
+                }
             }
         }
 
