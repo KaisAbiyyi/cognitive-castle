@@ -49,11 +49,11 @@ Primary owners: **Kais**, **Nazar**
 
 ### 5. Basic HUD & Game Loop Orchestration
 
-- [ ] Implement minimal HUD component showing **Score**, **Current Level/Span**, and basic instructions _(Kais)_
-- [ ] Add "Ready / Observe / Answer" state text to guide user phase-by-phase _(Kais)_
-- [ ] Implement simple finite state machine in `Main` (or controller class) for phases: `IDLE -> STIMULUS -> INPUT -> RESULT -> NEXT` _(Kais)_
-- [ ] Wire HUD updates to FSM transitions (e.g. highlight active phase) _(Kais)_
-- [ ] Add a basic "Next Trial" button or auto-advance delay after result display _(Kais)_
+- [x] Implement minimal HUD component showing **Score**, **Current Level/Span**, and basic instructions _(Kais)_
+- [x] Add "Ready / Observe / Answer" state text to guide user phase-by-phase _(Kais)_
+- [x] Implement simple finite state machine in `Main` (or controller class) for phases: `IDLE -> STIMULUS -> INPUT -> RESULT -> NEXT` _(Kais)_
+- [x] Wire HUD updates to FSM transitions (e.g. highlight active phase) _(Kais)_
+- [x] Add a basic "Next Trial" button or auto-advance delay after result display _(Kais)_
 
 ### 6. Integration & Platform Checks
 

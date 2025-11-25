@@ -5,33 +5,36 @@ package {
     import flash.system.Capabilities;
     import flash.display.StageAlign;
     import flash.display.StageScaleMode;
+    import flash.events.Event;
 
     public class Main extends Sprite {
+        private var _hud:HUD;
+        private var _gameController:GameController;
+
         public function Main() {
-            // 1. Setup Layar agar tidak gepeng (Responsive)
+            // Setup stage
             stage.scaleMode = StageScaleMode.NO_SCALE;
             stage.align = StageAlign.TOP_LEFT;
+            stage.addEventListener(Event.RESIZE, onResize);
 
-            // 2. Cek Platform
-            var platform:String = Capabilities.version;
-            
-            // 3. Tampilkan Teks
-            var tf:TextField = new TextField();
-            var format:TextFormat = new TextFormat();
-            format.size = 30; // Ukuran font besar
-            
-            tf.defaultTextFormat = format;
-            tf.text = "Cognitive Castle\n" + 
-                      "System: " + platform + "\n" + 
-                      "Resolution: " + stage.stageWidth + "x" + stage.stageHeight;
-            
-            tf.width = stage.stageWidth; // Lebar ngikutin layar
-            tf.height = 500;
-            tf.textColor = 0x000000; // Warna Hitam
-            addChild(tf);
-            
-            // Logika visualisasi kastil akan dimulai dari sini nanti
-            // initCastle(); 
+            // Initialize HUD
+            _hud = new HUD();
+            addChild(_hud);
+
+            // Initialize Game Controller
+            _gameController = GameController.getInstance();
+            _gameController.initialize(_hud);
+
+            // Remove old debug text (will be replaced by HUD)
+            // Keep platform info for debugging if needed
+            trace("Cognitive Castle initialized on: " + Capabilities.version);
+            trace("Resolution: " + stage.stageWidth + "x" + stage.stageHeight);
+        }
+
+        private function onResize(event:Event):void {
+            if (_hud) {
+                _hud.onResize();
+            }
         }
     }
 }
