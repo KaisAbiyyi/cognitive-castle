@@ -152,8 +152,9 @@ package input {
          * @param onTimeout Callback when timeout occurs (function():void)
          * @param timeoutMs Timeout duration in milliseconds
          * @param onButtonClick Optional callback for each button click (function(buffer:Vector.<int>):void)
+         * @param numButtonsToShow Number of buttons to show (defaults to all 6)
          */
-        public function startInputPhase(onInputReceived:Function, onTimeout:Function = null, timeoutMs:int = 10000, onButtonClick:Function = null):void {
+        public function startInputPhase(onInputReceived:Function, onTimeout:Function = null, timeoutMs:int = 10000, onButtonClick:Function = null, numButtonsToShow:int = -1):void {
             _inputBuffer.length = 0; // Clear buffer
             _onInputReceived = onInputReceived;
             _onTimeout = onTimeout;
@@ -162,8 +163,8 @@ package input {
             _isInputEnabled = true;
             _inputStartTime = getTimer();
 
-            // Show input buttons
-            showButtons();
+            // Show input buttons (only show as many as needed)
+            showButtons(numButtonsToShow);
 
             // Reset and start timeout timer
             _timeoutTimer.reset();
@@ -196,14 +197,18 @@ package input {
         }
 
         /**
-         * Show all input buttons
+         * Show input buttons
+         * @param numToShow Number of buttons to show (-1 for all)
          */
-        private function showButtons():void {
-            for each (var button:Sprite in _inputButtons) {
-                button.visible = true;
+        private function showButtons(numToShow:int = -1):void {
+            var count:int = (numToShow > 0 && numToShow <= _inputButtons.length) ? numToShow : _inputButtons.length;
+            
+            for (var i:int = 0; i < _inputButtons.length; i++) {
+                _inputButtons[i].visible = (i < count);
             }
+            
             if (DEBUG) {
-                trace("Input buttons shown");
+                trace("Input buttons shown: " + count + " of " + _inputButtons.length);
             }
         }
 
