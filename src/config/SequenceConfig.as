@@ -1,8 +1,13 @@
-package {
+package config {
 
     /**
      * SequenceConfig - Defines the difficulty tiers, symbol pools, and color variations for sequence generation.
      * This class provides static constants for the sequence challenge mechanics.
+     *
+     * SOLID Principles:
+     * - Single Responsibility: Only provides configuration data
+     * - Open/Closed: New configurations can be added without modifying existing code
+     * - Interface Segregation: Provides only configuration-related constants
      */
     public class SequenceConfig {
 

@@ -1,13 +1,23 @@
-package {
+package ui {
 
     import flash.display.Sprite;
+    import flash.display.Shape;
+    import flash.display.SimpleButton;
     import flash.text.TextField;
     import flash.text.TextFormat;
     import flash.text.TextFieldAutoSize;
+    import flash.text.TextFormatAlign;
+    import flash.events.Event;
+    import flash.events.MouseEvent;
 
     /**
      * HUD - Heads-Up Display component showing game state and instructions.
      * Displays score, level, phase instructions, and state guidance.
+     *
+     * SOLID Principles:
+     * - Single Responsibility: Only handles UI display and updates
+     * - Open/Closed: Can be extended with new display elements without changing existing code
+     * - Interface Segregation: Provides focused UI update methods
      */
     public class HUD extends Sprite {
 
@@ -16,23 +26,41 @@ package {
         private var _levelText:TextField;
         private var _instructionText:TextField;
         private var _stateText:TextField;
+        private var _startButton:flash.display.SimpleButton;
 
         // Current values
         private var _currentScore:int = 0;
         private var _currentLevel:int = 1;
         private var _currentSpan:int = 2;
 
+        // Stage dimensions
+        private var _stageWidth:Number = 1920;
+        private var _stageHeight:Number = 1080;
+
         // Layout constants
         private const PADDING:int = 20;
         private const FONT_SIZE:int = 24;
         private const SMALL_FONT_SIZE:int = 18;
+        
+        // Events
+        public static const START_TRIAL:String = "startTrial";
 
         /**
          * Constructor
          */
         public function HUD() {
             initializeTextFields();
-            layoutComponents();
+        }
+
+        /**
+         * Initialize the HUD with stage dimensions
+         */
+        public function initialize(stageWidth:Number, stageHeight:Number):void {
+            _stageWidth = stageWidth;
+            _stageHeight = stageHeight;
+            drawBackground(stageWidth, stageHeight);
+            createStartButton(stageWidth, stageHeight);
+            layoutComponents(stageWidth, stageHeight);
             updateDisplay();
         }
 
@@ -83,14 +111,69 @@ package {
         }
 
         /**
+         * Draw background
+         */
+        private function drawBackground(stageWidth:Number, stageHeight:Number):void {
+            graphics.beginFill(0x1a1a2e, 1);
+            graphics.drawRect(0, 0, stageWidth, stageHeight);
+            graphics.endFill();
+        }
+
+        /**
+         * Create start button
+         */
+        private function createStartButton(stageWidth:Number, stageHeight:Number):void {
+            var upState:Sprite = createButtonState(0x4a90e2, "START");
+            var overState:Sprite = createButtonState(0x357abd, "START");
+            var downState:Sprite = createButtonState(0x1a4d7f, "START");
+
+            _startButton = new SimpleButton(upState, overState, downState, upState);
+            _startButton.x = (stageWidth - 200) / 2;
+            _startButton.y = (stageHeight - 60) / 2;
+            _startButton.addEventListener(MouseEvent.CLICK, onStartButtonClick);
+            addChild(_startButton);
+        }
+
+        /**
+         * Create a button state sprite
+         */
+        private function createButtonState(color:uint, label:String):Sprite {
+            var sprite:Sprite = new Sprite();
+            sprite.graphics.beginFill(color, 1);
+            sprite.graphics.drawRect(0, 0, 200, 60);
+            sprite.graphics.endFill();
+
+            var textField:TextField = new TextField();
+            var format:TextFormat = new TextFormat();
+            format.font = "Arial";
+            format.size = 20;
+            format.color = 0xFFFFFF;
+            format.bold = true;
+            format.align = TextFormatAlign.CENTER;
+
+            textField.defaultTextFormat = format;
+            textField.text = label;
+            textField.width = 200;
+            textField.height = 60;
+            textField.y = 15;
+            textField.selectable = false;
+
+            sprite.addChild(textField);
+            return sprite;
+        }
+
+        /**
+         * Start button click handler
+         */
+        private function onStartButtonClick(event:MouseEvent):void {
+            dispatchEvent(new Event(START_TRIAL));
+            _startButton.visible = false;
+        }
+
+        /**
          * Layout components on stage
          */
-        private function layoutComponents():void {
-            if (!stage) return;
-
-            var stageWidth:int = stage.stageWidth;
-            var stageHeight:int = stage.stageHeight;
-
+        private function layoutComponents(stageWidth:Number, stageHeight:Number):void {
             // Score - top left
             _scoreText.x = PADDING;
             _scoreText.y = PADDING;
@@ -115,7 +198,7 @@ package {
         private function updateDisplay():void {
             _scoreText.text = "Score: " + _currentScore;
             _levelText.text = "Level: " + _currentLevel + " (Span: " + _currentSpan + ")";
-            layoutComponents();
+            layoutComponents(_stageWidth, _stageHeight);
         }
 
         /**
@@ -151,7 +234,7 @@ package {
          */
         public function setStateText(stateText:String):void {
             _stateText.text = stateText;
-            layoutComponents();
+            layoutComponents(_stageWidth, _stageHeight);
         }
 
         /**
@@ -160,14 +243,14 @@ package {
          */
         public function setInstructionText(instruction:String):void {
             _instructionText.text = instruction;
-            layoutComponents();
+            layoutComponents(_stageWidth, _stageHeight);
         }
 
         /**
          * Handle stage resize
          */
         public function onResize():void {
-            layoutComponents();
+            layoutComponents(_stageWidth, _stageHeight);
         }
 
         /**

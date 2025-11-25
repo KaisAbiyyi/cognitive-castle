@@ -1,8 +1,16 @@
-package {
+package game {
+
+    import domain.StimulusItem;
+    import domain.ValidationResult;
 
     /**
      * Validator - Validates user input against generated sequences.
      * Supports different validation modes for various challenge types.
+     *
+     * SOLID Principles:
+     * - Single Responsibility: Only handles validation logic
+     * - Open/Closed: Can be extended with new validation modes without changing existing code
+     * - Dependency Inversion: Depends on abstractions (ValidationResult)
      */
     public class Validator {
 

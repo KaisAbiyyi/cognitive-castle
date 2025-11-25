@@ -1,7 +1,12 @@
-package {
+package domain {
 
     /**
      * ValidationResult - Contains the result of sequence validation.
+     *
+     * SOLID Principles:
+     * - Single Responsibility: Only holds validation result data
+     * - Open/Closed: Can be extended with new result properties without changing existing code
+     * - Liskov Substitution: Can be used anywhere ValidationResult is expected
      */
     public class ValidationResult {
 

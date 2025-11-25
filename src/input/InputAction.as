@@ -1,8 +1,13 @@
-package {
+package input {
 
     /**
      * InputAction - Unified input event model that abstracts Touch vs Mouse events.
      * Used to standardize input handling across platforms.
+     *
+     * SOLID Principles:
+     * - Single Responsibility: Only represents input action data
+     * - Open/Closed: Can be extended with new action types without changing existing code
+     * - Liskov Substitution: Can be used anywhere InputAction is expected
      */
     public class InputAction {
 

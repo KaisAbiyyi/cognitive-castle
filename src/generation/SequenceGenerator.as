@@ -1,12 +1,22 @@
-package {
+package generation {
 
     import flash.utils.getTimer;
+    import config.SequenceConfig;
+    import domain.StimulusItem;
 
     /**
      * SequenceGenerator - Generates random sequences of stimulus items for the cognitive challenge.
      * Uses difficulty tiers from SequenceConfig with randomness rules to ensure fair challenge.
+     *
+     * SOLID Principles:
+     * - Single Responsibility: Only handles sequence generation logic
+     * - Open/Closed: Can be extended with new generation algorithms
+     * - Dependency Inversion: Depends on abstractions (SequenceConfig)
      */
     public class SequenceGenerator {
+
+        // Debug flag for conditional logging
+        private static const DEBUG:Boolean = true;
 
         // Current difficulty level (placeholder - will be hooked to adaptive system later)
         private static var _currentLevel:int = 1;
@@ -153,9 +163,11 @@ package {
          */
         public function generateAndLogSequence(level:int = -1):Vector.<StimulusItem> {
             var sequence:Vector.<StimulusItem> = generateSequence(level);
-            trace("Generated sequence for level " + (level > 0 ? level : _currentLevel) + ":");
-            for (var i:int = 0; i < sequence.length; i++) {
-                trace("  " + i + ": " + sequence[i].toString());
+            if (DEBUG) {
+                trace("Generated sequence for level " + (level > 0 ? level : _currentLevel) + ":");
+                for (var i:int = 0; i < sequence.length; i++) {
+                    trace("  " + i + ": " + sequence[i].toString());
+                }
             }
             return sequence;
         }
@@ -165,15 +177,17 @@ package {
          * @param iterations Number of test sequences to generate
          */
         public function runTestHarness(iterations:int = 10):void {
-            trace("=== SequenceGenerator Test Harness ===");
-            for (var level:int = 1; level <= 5; level++) {
-                trace("Testing Level " + level + ":");
-                for (var i:int = 0; i < iterations; i++) {
-                    var sequence:Vector.<StimulusItem> = generateSequence(level);
-                    validateSequence(sequence, level);
+            if (DEBUG) {
+                trace("=== SequenceGenerator Test Harness ===");
+                for (var level:int = 1; level <= 5; level++) {
+                    trace("Testing Level " + level + ":");
+                    for (var i:int = 0; i < iterations; i++) {
+                        var sequence:Vector.<StimulusItem> = generateSequence(level);
+                        validateSequence(sequence, level);
+                    }
                 }
+                trace("=== Test Harness Complete ===");
             }
-            trace("=== Test Harness Complete ===");
         }
 
         /**
@@ -186,7 +200,9 @@ package {
 
             // Check length
             if (sequence.length < tier.minLength || sequence.length > tier.maxLength) {
-                trace("ERROR: Invalid length " + sequence.length + " for level " + level);
+                if (DEBUG) {
+                    trace("ERROR: Invalid length " + sequence.length + " for level " + level);
+                }
             }
 
             // Check symbol variety
@@ -199,14 +215,18 @@ package {
                 }
             }
             if (symbolCount > tier.symbols) {
-                trace("ERROR: Too many symbol types (" + symbolCount + ") for level " + level + " (max " + tier.symbols + ")");
+                if (DEBUG) {
+                    trace("ERROR: Too many symbol types (" + symbolCount + ") for level " + level + " (max " + tier.symbols + ")");
+                }
             }
 
             // Check color rules
             for (var i:int = 1; i < sequence.length; i++) {
                 if (SequenceConfig.COLOR_VARIATION.ensureDistinct &&
                     sequence[i].color == sequence[i-1].color) {
-                    trace("ERROR: Consecutive same colors at position " + i);
+                    if (DEBUG) {
+                        trace("ERROR: Consecutive same colors at position " + i);
+                    }
                 }
             }
 
@@ -214,7 +234,9 @@ package {
             for (i = 2; i < sequence.length; i++) {
                 if (sequence[i].symbol == sequence[i-1].symbol &&
                     sequence[i].symbol == sequence[i-2].symbol) {
-                    trace("ERROR: Three consecutive same symbols at position " + i);
+                    if (DEBUG) {
+                        trace("ERROR: Three consecutive same symbols at position " + i);
+                    }
                 }
             }
         }

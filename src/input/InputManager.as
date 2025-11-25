@@ -1,7 +1,10 @@
-package {
+package input {
 
     import flash.display.DisplayObject;
     import flash.display.Sprite;
+    import flash.text.TextField;
+    import flash.text.TextFormat;
+    import flash.text.TextFormatAlign;
     import flash.events.MouseEvent;
     import flash.events.TouchEvent;
     import flash.events.TimerEvent;
@@ -11,8 +14,16 @@ package {
     /**
      * InputManager - Handles cross-platform input (Touch and Mouse) with unified event model.
      * Manages input collection, visual feedback, and timeout handling.
+     *
+     * SOLID Principles:
+     * - Single Responsibility: Only manages input handling and collection
+     * - Open/Closed: Can be extended with new input types without changing existing code
+     * - Dependency Inversion: Depends on abstractions (InputAction) rather than concrete events
      */
     public class InputManager extends Sprite {
+
+        // Debug flag for conditional logging (set to false for release builds)
+        private static const DEBUG:Boolean = true;
 
         // Singleton instance
         private static var _instance:InputManager;
@@ -27,6 +38,7 @@ package {
         // Callback functions
         private var _onInputReceived:Function;
         private var _onTimeout:Function;
+        private var _onButtonClick:Function; // Callback for each button click
 
         // Input state
         private var _isInputEnabled:Boolean = false;
@@ -34,6 +46,12 @@ package {
 
         // Visual feedback - map of display objects to their states
         private var _buttonStates:Object; // stimulusId -> {normal, pressed, disabled}
+        
+        // Input buttons (Week 1 demo - 6 simple buttons)
+        private var _inputButtons:Vector.<Sprite>;
+        private const NUM_BUTTONS:int = 6;
+        private const BUTTON_SIZE:int = 80;
+        private const BUTTON_SPACING:int = 20;
 
         /**
          * Get singleton instance
@@ -52,10 +70,80 @@ package {
         public function InputManager() {
             _inputBuffer = new Vector.<int>();
             _buttonStates = {};
+            _inputButtons = new Vector.<Sprite>();
 
             // Initialize timeout timer
             _timeoutTimer = new Timer(_timeoutDuration, 1);
             _timeoutTimer.addEventListener(TimerEvent.TIMER_COMPLETE, onTimeoutComplete);
+            
+            // Create input buttons for Week 1
+            createInputButtons();
+        }
+
+        /**
+         * Create 6 input buttons for Week 1 demo
+         */
+        private function createInputButtons():void {
+            // Calculate button grid (2x3 or 3x2)
+            var cols:int = 3;
+            var rows:int = 2;
+            
+            // Use actual stage dimensions if available, otherwise default
+            var stageW:int = stage ? stage.stageWidth : 480;
+            var stageH:int = stage ? stage.stageHeight : 300;
+            
+            var startX:int = (stageW - (cols * (BUTTON_SIZE + BUTTON_SPACING))) / 2;
+            var startY:int = stageH - (rows * (BUTTON_SIZE + BUTTON_SPACING)) - 20; // 20px from bottom
+
+            for (var i:int = 0; i < NUM_BUTTONS; i++) {
+                var col:int = i % cols;
+                var row:int = Math.floor(i / cols);
+
+                var button:Sprite = new Sprite();
+                button.graphics.beginFill(0x3498DB, 1);
+                button.graphics.drawRect(0, 0, BUTTON_SIZE, BUTTON_SIZE);
+                button.graphics.endFill();
+
+                // Add border
+                button.graphics.lineStyle(2, 0xFFFFFF, 1);
+                button.graphics.drawRect(0, 0, BUTTON_SIZE, BUTTON_SIZE);
+
+                // Add number label
+                var label:TextField = new TextField();
+                var format:TextFormat = new TextFormat();
+                format.font = "Arial";
+                format.size = 24;
+                format.color = 0xFFFFFF;
+                format.bold = true;
+                format.align = "center";
+                label.defaultTextFormat = format;
+                label.text = String(i + 1);
+                label.width = BUTTON_SIZE;
+                label.height = BUTTON_SIZE;
+                label.selectable = false;
+                label.y = 18;
+                button.addChild(label);
+
+                // Position button
+                button.x = startX + (col * (BUTTON_SIZE + BUTTON_SPACING));
+                button.y = startY + (row * (BUTTON_SIZE + BUTTON_SPACING));
+                // Use button name for stimulus ID mapping (getStimulusIdFromButton will parse it)
+                button.name = "button_" + i;
+                button.visible = false; // Hidden by default, shown when startInputPhase() called
+
+                // Register event listeners
+                button.addEventListener(MouseEvent.MOUSE_DOWN, onMouseDown);
+                button.addEventListener(MouseEvent.CLICK, onMouseClick);
+
+                // Add to manager
+                addChild(button);
+                _inputButtons.push(button);
+                registerButton(button, i);
+
+                if (DEBUG) {
+                    trace("Created input button " + i);
+                }
+            }
         }
 
         /**
@@ -63,14 +151,19 @@ package {
          * @param onInputReceived Callback when input is received (function(buffer:Vector.<int>):void)
          * @param onTimeout Callback when timeout occurs (function():void)
          * @param timeoutMs Timeout duration in milliseconds
+         * @param onButtonClick Optional callback for each button click (function(buffer:Vector.<int>):void)
          */
-        public function startInputPhase(onInputReceived:Function, onTimeout:Function = null, timeoutMs:int = 10000):void {
+        public function startInputPhase(onInputReceived:Function, onTimeout:Function = null, timeoutMs:int = 10000, onButtonClick:Function = null):void {
             _inputBuffer.length = 0; // Clear buffer
             _onInputReceived = onInputReceived;
             _onTimeout = onTimeout;
+            _onButtonClick = onButtonClick;
             _timeoutDuration = timeoutMs;
             _isInputEnabled = true;
             _inputStartTime = getTimer();
+
+            // Show input buttons
+            showButtons();
 
             // Reset and start timeout timer
             _timeoutTimer.reset();
@@ -84,7 +177,9 @@ package {
                 }
             }
 
-            trace("Input phase started - timeout in " + _timeoutDuration + "ms");
+            if (DEBUG) {
+                trace("Input phase started - timeout in " + _timeoutDuration + "ms");
+            }
         }
 
         /**
@@ -95,6 +190,33 @@ package {
             _timeoutTimer.stop();
             _onInputReceived = null;
             _onTimeout = null;
+            
+            // Hide input buttons
+            hideButtons();
+        }
+
+        /**
+         * Show all input buttons
+         */
+        private function showButtons():void {
+            for each (var button:Sprite in _inputButtons) {
+                button.visible = true;
+            }
+            if (DEBUG) {
+                trace("Input buttons shown");
+            }
+        }
+
+        /**
+         * Hide all input buttons
+         */
+        private function hideButtons():void {
+            for each (var button:Sprite in _inputButtons) {
+                button.visible = false;
+            }
+            if (DEBUG) {
+                trace("Input buttons hidden");
+            }
         }
 
         /**
@@ -228,7 +350,14 @@ package {
             // For click/press actions, add to buffer
             if (type == InputAction.CLICK || type == InputAction.PRESS) {
                 _inputBuffer.push(stimulusId);
-                trace("Input received: " + action.toString());
+                if (DEBUG) {
+                    trace("Input received: " + action.toString() + " - Buffer: " + _inputBuffer.join(","));
+                }
+
+                // Call button click callback if provided
+                if (_onButtonClick != null) {
+                    _onButtonClick(_inputBuffer);
+                }
 
                 // Auto-submit on buffer full or implement manual submit logic
                 // For now, continue collecting until timeout or explicit submit
@@ -276,7 +405,9 @@ package {
                 _onInputReceived(_inputBuffer.slice()); // Pass copy
             }
 
-            trace("Input submitted: " + _inputBuffer.join(","));
+            if (DEBUG) {
+                trace("Input submitted: " + _inputBuffer.join(","));
+            }
         }
 
         /**
@@ -310,7 +441,9 @@ package {
             if (!_isInputEnabled) return;
 
             _isInputEnabled = false;
-            trace("Input timeout occurred");
+            if (DEBUG) {
+                trace("Input timeout occurred");
+            }
 
             if (_onTimeout != null) {
                 _onTimeout();

@@ -8,9 +8,13 @@
     <initialWindow>
         <content>CognitiveCastle.swf</content>
         <visible>true</visible>
-        <fullScreen>true</fullScreen>
+        <width>1280</width>
+        <height>720</height>
+        <fullScreen>false</fullScreen>
         <autoOrients>true</autoOrients>
-        <aspectRatio>landscape</aspectRatio> <renderMode>direct</renderMode>      </initialWindow>
+        <aspectRatio>landscape</aspectRatio>
+        <renderMode>direct</renderMode>
+    </initialWindow>
 
     <android>
         <manifestAdditions><![CDATA[

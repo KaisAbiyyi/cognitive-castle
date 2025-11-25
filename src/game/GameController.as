@@ -1,4 +1,4 @@
-package {
+package game {
 
     import flash.display.Sprite;
     import flash.display.SimpleButton;
@@ -7,12 +7,24 @@ package {
     import flash.events.MouseEvent;
     import flash.utils.Timer;
     import flash.events.TimerEvent;
+    import ui.HUD;
+    import generation.SequenceGenerator;
+    import input.InputManager;
+    import domain.StimulusItem;
 
     /**
      * GameController - Manages the game loop finite state machine and orchestrates all game components.
      * Handles phase transitions: IDLE -> STIMULUS -> INPUT -> RESULT -> NEXT
+     *
+     * SOLID Principles:
+     * - Single Responsibility: Only orchestrates game flow and state management
+     * - Open/Closed: Can be extended with new game states without changing existing code
+     * - Dependency Inversion: Depends on abstractions (HUD, SequenceGenerator, InputManager)
      */
     public class GameController {
+
+        // Debug flag for conditional logging (set to false for release builds)
+        private static const DEBUG:Boolean = true;
 
         // FSM States
         public static const STATE_IDLE:String = "idle";
@@ -43,6 +55,8 @@ package {
         // UI Components
         private var _nextTrialButton:SimpleButton;
         private var _autoAdvanceTimer:Timer;
+        private var _stimulusDisplay:TextField; // Week 1 placeholder for stimulus
+        private var _userInputDisplay:TextField; // Show user's input as they click
 
         // Timing constants
         private const RESULT_DISPLAY_TIME:int = 3000; // 3 seconds
@@ -74,27 +88,120 @@ package {
          */
         public function initialize(hud:HUD):void {
             _hud = hud;
-            createNextTrialButton();
+            createStimulusDisplay();
+            createUserInputDisplay();
             enterState(STATE_IDLE);
         }
 
         /**
-         * Create the Next Trial button
+         * Create stimulus display TextField (Week 1 placeholder)
+         */
+        private function createStimulusDisplay():void {
+            _stimulusDisplay = new TextField();
+            var format:TextFormat = new TextFormat();
+            format.font = "Arial";
+            format.size = 80;
+            format.color = 0xFFFFFF;
+            format.bold = true;
+            format.align = "center";
+            
+            _stimulusDisplay.defaultTextFormat = format;
+            _stimulusDisplay.width = 400;
+            _stimulusDisplay.height = 100;
+            
+            // Position at center of actual stage
+            if (_hud.parent && _hud.parent.stage) {
+                _stimulusDisplay.x = (_hud.parent.stage.stageWidth - 400) / 2;
+                _stimulusDisplay.y = (_hud.parent.stage.stageHeight - 100) / 2;
+            } else {
+                // Fallback positioning
+                _stimulusDisplay.x = 40;
+                _stimulusDisplay.y = 100;
+            }
+            
+            _stimulusDisplay.selectable = false;
+            _stimulusDisplay.visible = false;
+            
+            // Add to HUD's parent (stage)
+            if (_hud.parent) {
+                _hud.parent.addChild(_stimulusDisplay);
+            }
+        }
+
+        /**
+         * Create user input display TextField (shows input as user clicks)
+         */
+        private function createUserInputDisplay():void {
+            _userInputDisplay = new TextField();
+            var format:TextFormat = new TextFormat();
+            format.font = "Arial";
+            format.size = 40;
+            format.color = 0x00FF00; // Green color
+            format.bold = true;
+            format.align = "center";
+            
+            _userInputDisplay.defaultTextFormat = format;
+            _userInputDisplay.width = 600;
+            _userInputDisplay.height = 60;
+            
+            // Position below center
+            if (_hud.parent && _hud.parent.stage) {
+                _userInputDisplay.x = (_hud.parent.stage.stageWidth - 600) / 2;
+                _userInputDisplay.y = (_hud.parent.stage.stageHeight / 2) + 80;
+            } else {
+                _userInputDisplay.x = 40;
+                _userInputDisplay.y = 180;
+            }
+            
+            _userInputDisplay.selectable = false;
+            _userInputDisplay.visible = false;
+            _userInputDisplay.text = "Your input: ";
+            
+            // Add to HUD's parent (stage)
+            if (_hud.parent) {
+                _hud.parent.addChild(_userInputDisplay);
+            }
+        }
+
+        /**
+         * Start next trial (public method called from HUD START button or NEXT button)
+         */
+        public function startNextTrial():void {
+            createNextTrialButton();
+            startNewTrial();
+        }
+
+        /**
+         * Create the Next Trial button (only if not already created)
          */
         private function createNextTrialButton():void {
+            // Only create once
+            if (_nextTrialButton) {
+                return;
+            }
+
             // Create button graphics
             var upState:Sprite = createButtonState("Next Trial", 0x4CAF50);
             var overState:Sprite = createButtonState("Next Trial", 0x66BB6A);
             var downState:Sprite = createButtonState("Next Trial", 0x388E3C);
 
             _nextTrialButton = new SimpleButton(upState, overState, downState, upState);
-            _nextTrialButton.x = (_hud.stage.stageWidth - _nextTrialButton.width) / 2;
-            _nextTrialButton.y = _hud.stage.stageHeight - 100;
+            
+            // Position using actual stage dimensions
+            if (_hud.parent && _hud.parent.stage) {
+                _nextTrialButton.x = (_hud.parent.stage.stageWidth - _nextTrialButton.width) / 2;
+                _nextTrialButton.y = _hud.parent.stage.stageHeight - 100;
+            } else {
+                _nextTrialButton.x = 175;
+                _nextTrialButton.y = 200;
+            }
+            
             _nextTrialButton.addEventListener(MouseEvent.CLICK, onNextTrialClick);
             _nextTrialButton.visible = false;
 
-            if (_hud.stage) {
-                _hud.stage.addChild(_nextTrialButton);
+            // Add to HUD's parent (stage)
+            if (_hud.parent) {
+                _hud.parent.addChild(_nextTrialButton);
             }
         }
 
@@ -138,7 +245,9 @@ package {
          * @param newState State to enter
          */
         private function enterState(newState:String):void {
-            trace("Entering state: " + newState);
+            if (DEBUG) {
+                trace("Entering state: " + newState);
+            }
             _currentState = newState;
 
             switch (newState) {
@@ -166,7 +275,7 @@ package {
         private function onEnterIdle():void {
             _hud.setStateText("Ready");
             _hud.setInstructionText("Press any key or tap to start the sequence challenge.");
-            _nextTrialButton.visible = true;
+            // Don't show next trial button in IDLE state - it's shown via HUD START button
         }
 
         /**
@@ -175,7 +284,9 @@ package {
         private function onEnterStimulus():void {
             _hud.setStateText("Observe");
             _hud.setInstructionText("Watch the sequence carefully...");
-            _nextTrialButton.visible = false;
+            if (_nextTrialButton) {
+                _nextTrialButton.visible = false;
+            }
 
             // Generate sequence
             _currentSequence = _sequenceGenerator.generateSequence(_hud.getLevel());
@@ -188,7 +299,9 @@ package {
             stimulusTimer.addEventListener(TimerEvent.TIMER_COMPLETE, onStimulusComplete);
             stimulusTimer.start();
 
-            trace("Showing sequence: " + _currentSequence.length + " items");
+            if (DEBUG) {
+                trace("Showing sequence: " + _currentSequence.length + " items");
+            }
         }
 
         /**
@@ -197,7 +310,14 @@ package {
         private function onStimulusTick(event:TimerEvent):void {
             var index:int = event.currentTarget.currentCount - 1;
             if (index < _currentSequence.length) {
-                trace("Stimulus " + index + ": " + _currentSequence[index].toString());
+                // Show stimulus number (Week 1 placeholder - just show the ID)
+                var item:StimulusItem = _currentSequence[index];
+                _stimulusDisplay.text = String(item.id + 1); // Show 1-indexed
+                _stimulusDisplay.visible = true;
+                
+                if (DEBUG) {
+                    trace("Stimulus " + index + ": " + item.toString());
+                }
             }
         }
 
@@ -205,6 +325,7 @@ package {
          * Handle stimulus complete
          */
         private function onStimulusComplete(event:TimerEvent):void {
+            _stimulusDisplay.visible = false;
             enterState(STATE_INPUT);
         }
 
@@ -215,8 +336,28 @@ package {
             _hud.setStateText("Answer");
             _hud.setInstructionText("Reproduce the sequence by clicking the buttons in order.");
 
-            // Start input collection
-            _inputManager.startInputPhase(onInputReceived, onInputTimeout);
+            // Show user input display
+            _userInputDisplay.text = "Your input: ";
+            _userInputDisplay.visible = true;
+
+            // Start input collection with callback for each button click
+            _inputManager.startInputPhase(onInputReceived, onInputTimeout, 10000, onButtonClicked);
+        }
+
+        /**
+         * Handle each button click (update display)
+         */
+        private function onButtonClicked(buffer:Vector.<int>):void {
+            // Convert buffer to 1-indexed display
+            var displayArray:Array = [];
+            for each (var id:int in buffer) {
+                displayArray.push(String(id + 1));
+            }
+            _userInputDisplay.text = "Your input: " + displayArray.join(", ");
+            
+            if (DEBUG) {
+                trace("Current input buffer: " + displayArray.join(", "));
+            }
         }
 
         /**
@@ -224,12 +365,35 @@ package {
          * @param input User input buffer
          */
         private function onInputReceived(input:Vector.<int>):void {
-            _userInput = input.slice();
-            trace("User input received: " + _userInput.join(","));
+            _userInput = new Vector.<int>();
+            for each (var id:int in input) {
+                _userInput.push(id);
+            }
+            
+            // Hide user input display
+            _userInputDisplay.visible = false;
+            
+            if (DEBUG) {
+                trace("========== VALIDATION ==========");
+                trace("User input received: " + _userInput.join(","));
+                
+                // Show expected sequence
+                var expectedIds:Array = [];
+                for each (var item:StimulusItem in _currentSequence) {
+                    expectedIds.push(item.id);
+                }
+                trace("Expected sequence: " + expectedIds.join(","));
+                trace("Length match: " + (_currentSequence.length == _userInput.length));
+            }
 
             // TODO: Validate input using Validator
             // For now, simple check
             _isCorrect = validateSimple(_currentSequence, _userInput);
+            
+            if (DEBUG) {
+                trace("Validation result: " + (_isCorrect ? "CORRECT" : "INCORRECT"));
+                trace("================================");
+            }
 
             enterState(STATE_RESULT);
         }
@@ -240,7 +404,9 @@ package {
         private function onInputTimeout():void {
             _userInput = new Vector.<int>();
             _isCorrect = false;
-            trace("Input timeout - incorrect");
+            if (DEBUG) {
+                trace("Input timeout - incorrect");
+            }
             enterState(STATE_RESULT);
         }
 
@@ -250,11 +416,24 @@ package {
          * @param input User input
          * @return True if correct
          */
-        private function validateSimple(sequence:Vector.<StimulusItem>, input:Vector.<int>):Boolean {
-            if (sequence.length != input.length) return false;
+        private function validateSimple(sequence:Vector.<StimulusItem>, userInput:Vector.<int>):Boolean {
+            if (sequence.length != userInput.length) {
+                if (DEBUG) {
+                    trace("Length mismatch: " + sequence.length + " vs " + userInput.length);
+                }
+                return false;
+            }
 
             for (var i:int = 0; i < sequence.length; i++) {
-                if (sequence[i].id != input[i]) return false;
+                if (DEBUG) {
+                    trace("Comparing position " + i + ": expected=" + sequence[i].id + " got=" + userInput[i]);
+                }
+                if (sequence[i].id != userInput[i]) {
+                    if (DEBUG) {
+                        trace("Mismatch at position " + i);
+                    }
+                    return false;
+                }
             }
             return true;
         }
@@ -265,15 +444,32 @@ package {
         private function onEnterResult():void {
             _trialCount++;
 
+            // Build comparison text
+            var expectedIds:Array = [];
+            for each (var item:StimulusItem in _currentSequence) {
+                expectedIds.push(String(item.id + 1)); // 1-indexed
+            }
+            var userIds:Array = [];
+            for each (var id:int in _userInput) {
+                userIds.push(String(id + 1)); // 1-indexed
+            }
+            
+            var comparisonText:String = "\nExpected: " + expectedIds.join(", ") + 
+                                       "\nYou entered: " + userIds.join(", ");
+
             if (_isCorrect) {
                 _hud.setScore(_hud.getScore() + 1);
                 _hud.setStateText("Correct!");
-                _hud.setInstructionText("Well done! Sequence completed successfully.");
-                trace("Trial " + _trialCount + ": CORRECT");
+                _hud.setInstructionText("Well done! Sequence completed successfully." + comparisonText);
+                if (DEBUG) {
+                    trace("Trial " + _trialCount + ": CORRECT");
+                }
             } else {
                 _hud.setStateText("Incorrect");
-                _hud.setInstructionText("Try again. Watch carefully next time.");
-                trace("Trial " + _trialCount + ": INCORRECT");
+                _hud.setInstructionText("Try again. Watch carefully next time." + comparisonText);
+                if (DEBUG) {
+                    trace("Trial " + _trialCount + ": INCORRECT");
+                }
             }
 
             // Auto-advance to next state after delay
@@ -286,7 +482,9 @@ package {
         private function onEnterNext():void {
             _hud.setStateText("Next Trial");
             _hud.setInstructionText("Get ready for the next sequence...");
-            _nextTrialButton.visible = true;
+            if (_nextTrialButton) {
+                _nextTrialButton.visible = true;
+            }
         }
 
         /**
