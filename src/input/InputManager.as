@@ -2,18 +2,35 @@ package input {
 
     import flash.display.DisplayObject;
     import flash.display.Sprite;
+    import flash.display.Stage;
     import flash.text.TextField;
     import flash.text.TextFormat;
     import flash.text.TextFormatAlign;
     import flash.events.MouseEvent;
     import flash.events.TouchEvent;
+    import flash.events.KeyboardEvent;
     import flash.events.TimerEvent;
+    import flash.events.Event;
     import flash.utils.Timer;
     import flash.utils.getTimer;
+    import flash.geom.Point;
+    import flash.ui.Keyboard;
+    import core.EventBus;
+    import core.GameEvent;
+    import core.Constants;
 
     /**
-     * InputManager - Handles cross-platform input (Touch and Mouse) with unified event model.
-     * Manages input collection, visual feedback, and timeout handling.
+     * InputManager - Handles cross-platform input (Touch, Mouse, Keyboard) with unified event model.
+     * Manages input collection, visual feedback, timeout handling, and undo functionality.
+     *
+     * Features:
+     * - Mouse click (Desktop)
+     * - Touch tap (Mobile)
+     * - Keyboard shortcuts (1-6 for buttons, Backspace for undo, Enter for submit, Escape for clear)
+     * - Visual input grid (2x3, 3x3, 4x3 layouts)
+     * - Input buffer with real-time display
+     * - Timeout with countdown
+     * - Undo last input
      *
      * SOLID Principles:
      * - Single Responsibility: Only manages input handling and collection
@@ -22,41 +39,59 @@ package input {
      */
     public class InputManager extends Sprite {
 
-        // Debug flag for conditional logging (set to false for release builds)
+        // Debug flag for conditional logging
         private static const DEBUG:Boolean = true;
+
+        // ============ GRID LAYOUTS ============
+        public static const LAYOUT_2x3:String = "2x3";  // 6 buttons
+        public static const LAYOUT_3x3:String = "3x3";  // 9 buttons
+        public static const LAYOUT_4x3:String = "4x3";  // 12 buttons
 
         // Singleton instance
         private static var _instance:InputManager;
 
         // Input buffer - collects stimulus IDs during answer phase
         private var _inputBuffer:Vector.<int>;
+        
+        // Action history for undo
+        private var _actionHistory:Vector.<InputAction>;
 
         // Timeout timer
         private var _timeoutTimer:Timer;
-        private var _timeoutDuration:int = 10000; // 10 seconds default
+        private var _timeoutDuration:int = 10000;
+        private var _countdownTimer:Timer;
 
         // Callback functions
         private var _onInputReceived:Function;
         private var _onTimeout:Function;
-        private var _onButtonClick:Function; // Callback for each button click
+        private var _onButtonClick:Function;
+        private var _onBufferChanged:Function;
 
         // Input state
         private var _isInputEnabled:Boolean = false;
         private var _inputStartTime:uint;
-        private var _expectedInputLength:int = -1; // Expected number of inputs (-1 = no limit)
+        private var _expectedInputLength:int = -1;
+        private var _currentLayout:String = LAYOUT_2x3;
 
-        // Visual feedback - map of display objects to their states
-        private var _buttonStates:Object; // stimulusId -> {normal, pressed, disabled}
+        // Visual feedback
+        private var _buttonStates:Object;
         
-        // Input buttons (Week 1 demo - 6 simple buttons)
+        // Input buttons
         private var _inputButtons:Vector.<Sprite>;
-        private const NUM_BUTTONS:int = 6;
-        private const BUTTON_SIZE:int = 80;
-        private const BUTTON_SPACING:int = 20;
+        private var _buttonSize:int = 80;
+        private var _buttonSpacing:int = 15;
+        
+        // Countdown display
+        private var _countdownDisplay:TextField;
+        
+        // EventBus reference
+        private var _eventBus:EventBus;
+        
+        // Stage reference for keyboard events
+        private var _stageRef:Stage;
 
         /**
          * Get singleton instance
-         * @return InputManager instance
          */
         public static function getInstance():InputManager {
             if (!_instance) {
@@ -66,87 +101,268 @@ package input {
         }
 
         /**
-         * Constructor (private for singleton)
+         * Constructor
          */
         public function InputManager() {
             _inputBuffer = new Vector.<int>();
+            _actionHistory = new Vector.<InputAction>();
             _buttonStates = {};
             _inputButtons = new Vector.<Sprite>();
+            _eventBus = EventBus.getInstance();
 
-            // Initialize timeout timer
+            // Initialize timers
             _timeoutTimer = new Timer(_timeoutDuration, 1);
             _timeoutTimer.addEventListener(TimerEvent.TIMER_COMPLETE, onTimeoutComplete);
             
-            // Create input buttons for Week 1
-            createInputButtons();
+            _countdownTimer = new Timer(100); // Update every 100ms
+            _countdownTimer.addEventListener(TimerEvent.TIMER, onCountdownTick);
+            
+            // Create buttons when added to stage
+            addEventListener(Event.ADDED_TO_STAGE, onAddedToStage);
+        }
+        
+        /**
+         * Handle added to stage - setup keyboard listeners
+         */
+        private function onAddedToStage(event:Event):void {
+            removeEventListener(Event.ADDED_TO_STAGE, onAddedToStage);
+            _stageRef = stage;
+            
+            // Setup keyboard listeners
+            stage.addEventListener(KeyboardEvent.KEY_DOWN, onKeyDown);
+            
+            // Create input buttons
+            createInputButtons(_currentLayout);
+            
+            // Create countdown display
+            createCountdownDisplay();
         }
 
         /**
-         * Create 6 input buttons for Week 1 demo
+         * Create input buttons based on layout
          */
-        private function createInputButtons():void {
-            // Calculate button grid (2x3 or 3x2)
-            var cols:int = 3;
-            var rows:int = 2;
+        private function createInputButtons(layout:String):void {
+            // Clear existing buttons
+            for each (var oldButton:Sprite in _inputButtons) {
+                if (contains(oldButton)) removeChild(oldButton);
+            }
+            _inputButtons.length = 0;
+            _buttonStates = {};
             
-            // Use actual stage dimensions if available, otherwise default
+            // Determine grid size
+            var cols:int, rows:int, numButtons:int;
+            switch (layout) {
+                case LAYOUT_3x3:
+                    cols = 3; rows = 3; numButtons = 9;
+                    break;
+                case LAYOUT_4x3:
+                    cols = 4; rows = 3; numButtons = 12;
+                    break;
+                case LAYOUT_2x3:
+                default:
+                    cols = 3; rows = 2; numButtons = 6;
+                    break;
+            }
+            
+            _currentLayout = layout;
+            
+            // Calculate positioning
             var stageW:int = stage ? stage.stageWidth : 480;
             var stageH:int = stage ? stage.stageHeight : 300;
             
-            var startX:int = (stageW - (cols * (BUTTON_SIZE + BUTTON_SPACING))) / 2;
-            var startY:int = stageH - (rows * (BUTTON_SIZE + BUTTON_SPACING)) - 20; // 20px from bottom
+            var gridWidth:int = cols * _buttonSize + (cols - 1) * _buttonSpacing;
+            var gridHeight:int = rows * _buttonSize + (rows - 1) * _buttonSpacing;
+            
+            var startX:int = (stageW - gridWidth) / 2;
+            var startY:int = stageH - gridHeight - 30;
 
-            for (var i:int = 0; i < NUM_BUTTONS; i++) {
+            // Button colors (colorblind-friendly)
+            var buttonColors:Array = Constants.STIMULUS_COLORS;
+
+            for (var i:int = 0; i < numButtons; i++) {
                 var col:int = i % cols;
                 var row:int = Math.floor(i / cols);
 
-                var button:Sprite = new Sprite();
-                button.graphics.beginFill(0x3498DB, 1);
-                button.graphics.drawRect(0, 0, BUTTON_SIZE, BUTTON_SIZE);
-                button.graphics.endFill();
-
-                // Add border
-                button.graphics.lineStyle(2, 0xFFFFFF, 1);
-                button.graphics.drawRect(0, 0, BUTTON_SIZE, BUTTON_SIZE);
-
-                // Add number label
-                var label:TextField = new TextField();
-                var format:TextFormat = new TextFormat();
-                format.font = "Arial";
-                format.size = 24;
-                format.color = 0xFFFFFF;
-                format.bold = true;
-                format.align = "center";
-                label.defaultTextFormat = format;
-                label.text = String(i + 1);
-                label.width = BUTTON_SIZE;
-                label.height = BUTTON_SIZE;
-                label.selectable = false;
-                label.y = 18;
-                button.addChild(label);
-
-                // Position button
-                button.x = startX + (col * (BUTTON_SIZE + BUTTON_SPACING));
-                button.y = startY + (row * (BUTTON_SIZE + BUTTON_SPACING));
-                // Use button name for stimulus ID mapping (getStimulusIdFromButton will parse it)
+                var button:Sprite = createButton(i, buttonColors[i % buttonColors.length]);
+                button.x = startX + col * (_buttonSize + _buttonSpacing);
+                button.y = startY + row * (_buttonSize + _buttonSpacing);
                 button.name = "button_" + i;
-                button.visible = false; // Hidden by default, shown when startInputPhase() called
+                button.visible = false;
 
                 // Register event listeners
                 button.addEventListener(MouseEvent.MOUSE_DOWN, onMouseDown);
                 button.addEventListener(MouseEvent.CLICK, onMouseClick);
+                button.buttonMode = true;
+                button.useHandCursor = true;
 
-                // Add to manager
                 addChild(button);
                 _inputButtons.push(button);
                 registerButton(button, i);
+            }
+            
+            if (DEBUG) {
+                trace("[InputManager] Created " + numButtons + " buttons with layout " + layout);
+            }
+        }
+        
+        /**
+         * Create a single button
+         */
+        private function createButton(index:int, color:uint):Sprite {
+            var button:Sprite = new Sprite();
+            
+            // Background
+            button.graphics.beginFill(color, 1);
+            button.graphics.lineStyle(3, 0xFFFFFF, 1);
+            button.graphics.drawRoundRect(0, 0, _buttonSize, _buttonSize, 12, 12);
+            button.graphics.endFill();
 
-                if (DEBUG) {
-                    trace("Created input button " + i);
+            // Label
+            var label:TextField = new TextField();
+            var format:TextFormat = new TextFormat();
+            format.font = "Arial";
+            format.size = 28;
+            format.color = 0xFFFFFF;
+            format.bold = true;
+            format.align = TextFormatAlign.CENTER;
+            label.defaultTextFormat = format;
+            label.text = String(index + 1);
+            label.width = _buttonSize;
+            label.height = 40;
+            label.selectable = false;
+            label.mouseEnabled = false;
+            label.y = (_buttonSize - 32) / 2;
+            button.addChild(label);
+
+            return button;
+        }
+        
+        /**
+         * Create countdown display
+         */
+        private function createCountdownDisplay():void {
+            _countdownDisplay = new TextField();
+            var format:TextFormat = new TextFormat();
+            format.font = "Arial";
+            format.size = 18;
+            format.color = 0xFFFFFF;
+            format.align = TextFormatAlign.CENTER;
+            _countdownDisplay.defaultTextFormat = format;
+            _countdownDisplay.width = 100;
+            _countdownDisplay.height = 25;
+            _countdownDisplay.selectable = false;
+            _countdownDisplay.visible = false;
+            
+            // Position above buttons
+            if (stage) {
+                _countdownDisplay.x = (stage.stageWidth - 100) / 2;
+                _countdownDisplay.y = 10;
+            }
+            addChild(_countdownDisplay);
+        }
+
+        /**
+         * Handle keyboard input
+         */
+        private function onKeyDown(event:KeyboardEvent):void {
+            if (!_isInputEnabled) return;
+            
+            var action:InputAction = null;
+            
+            // Number keys 1-9 (and 0 for 10) map to buttons
+            if (event.keyCode >= Keyboard.NUMBER_1 && event.keyCode <= Keyboard.NUMBER_9) {
+                var buttonIndex:int = event.keyCode - Keyboard.NUMBER_1;
+                if (buttonIndex < _inputButtons.length && _inputButtons[buttonIndex].visible) {
+                    action = InputAction.fromKeyboard(InputAction.KEY, buttonIndex, event.keyCode);
+                    handleInputAction(action);
                 }
+            }
+            // Numpad 1-9
+            else if (event.keyCode >= Keyboard.NUMPAD_1 && event.keyCode <= Keyboard.NUMPAD_9) {
+                var numpadIndex:int = event.keyCode - Keyboard.NUMPAD_1;
+                if (numpadIndex < _inputButtons.length && _inputButtons[numpadIndex].visible) {
+                    action = InputAction.fromKeyboard(InputAction.KEY, numpadIndex, event.keyCode);
+                    handleInputAction(action);
+                }
+            }
+            // Backspace - Undo last input
+            else if (event.keyCode == Keyboard.BACKSPACE || event.keyCode == Keyboard.DELETE) {
+                undoLastInput();
+            }
+            // Enter - Submit
+            else if (event.keyCode == Keyboard.ENTER) {
+                submitInput();
+            }
+            // Escape - Clear all
+            else if (event.keyCode == Keyboard.ESCAPE) {
+                clearBuffer();
+                _eventBus.dispatch(GameEvent.INPUT_CLEARED, {});
             }
         }
 
+        /**
+         * Set the grid layout
+         */
+        public function setLayout(layout:String):void {
+            if (_currentLayout != layout) {
+                createInputButtons(layout);
+            }
+        }
+        
+        /**
+         * Get current layout
+         */
+        public function get currentLayout():String {
+            return _currentLayout;
+        }
+        
+        /**
+         * Undo the last input action
+         */
+        public function undoLastInput():void {
+            if (_inputBuffer.length > 0) {
+                var removed:int = _inputBuffer.pop();
+                if (DEBUG) {
+                    trace("[InputManager] Undo last input: " + removed + " - Buffer now: " + _inputBuffer.join(","));
+                }
+                _eventBus.dispatch(GameEvent.INPUT_CLEARED, { removedId: removed, buffer: _inputBuffer.slice() });
+                
+                // Callback to update UI
+                if (_onButtonClick != null) {
+                    _onButtonClick(_inputBuffer);
+                }
+            }
+        }
+        
+        /**
+         * Handle countdown timer tick
+         */
+        private function onCountdownTick(event:TimerEvent):void {
+            if (!_isInputEnabled) return;
+            
+            var remaining:int = getTimeRemaining();
+            var seconds:Number = Math.ceil(remaining / 1000);
+            
+            if (_countdownDisplay) {
+                _countdownDisplay.text = String(seconds) + "s";
+                _countdownDisplay.visible = true;
+                
+                // Color change when low on time
+                var format:TextFormat = _countdownDisplay.getTextFormat();
+                if (seconds <= 3) {
+                    format.color = 0xFF4444; // Red
+                } else if (seconds <= 5) {
+                    format.color = 0xFFAA00; // Orange  
+                } else {
+                    format.color = 0xFFFFFF; // White
+                }
+                _countdownDisplay.setTextFormat(format);
+            }
+            
+            // Dispatch tick event
+            _eventBus.dispatch(GameEvent.COUNTDOWN_TICK, { remaining: remaining, seconds: seconds });
+        }
+        
         /**
          * Enable input collection phase
          * @param onInputReceived Callback when input is received (function(buffer:Vector.<int>):void)
@@ -311,7 +527,8 @@ package input {
 
             var stimulusId:int = getStimulusIdFromButton(event.currentTarget as DisplayObject);
             if (stimulusId >= 0) {
-                handleInputAction(InputAction.CLICK, stimulusId, event.stageX, event.stageY);
+                var action:InputAction = InputAction.fromMouse(InputAction.CLICK, stimulusId, event.stageX, event.stageY);
+                handleInputAction(action);
                 setButtonState(event.currentTarget as DisplayObject, "normal");
             }
         }
@@ -325,7 +542,8 @@ package input {
 
             var stimulusId:int = getStimulusIdFromButton(event.currentTarget as DisplayObject);
             if (stimulusId >= 0) {
-                handleInputAction(InputAction.PRESS, stimulusId, event.stageX, event.stageY);
+                var action:InputAction = InputAction.fromTouch(InputAction.PRESS, stimulusId, event.stageX, event.stageY);
+                handleInputAction(action);
                 setButtonState(event.currentTarget as DisplayObject, "pressed");
             }
         }
@@ -339,24 +557,20 @@ package input {
 
             var stimulusId:int = getStimulusIdFromButton(event.currentTarget as DisplayObject);
             if (stimulusId >= 0) {
-                handleInputAction(InputAction.RELEASE, stimulusId, event.stageX, event.stageY);
+                var action:InputAction = InputAction.fromTouch(InputAction.RELEASE, stimulusId, event.stageX, event.stageY);
+                handleInputAction(action);
                 setButtonState(event.currentTarget as DisplayObject, "normal");
             }
         }
 
         /**
          * Handle input action (unified processing)
-         * @param type Action type
-         * @param stimulusId Stimulus identifier
-         * @param x X position
-         * @param y Y position
+         * @param action InputAction object
          */
-        private function handleInputAction(type:String, stimulusId:int, x:Number, y:Number):void {
-            var action:InputAction = new InputAction(type, stimulusId, x, y);
-
-            // For click/press actions, add to buffer
-            if (type == InputAction.CLICK || type == InputAction.PRESS) {
-                _inputBuffer.push(stimulusId);
+        private function handleInputAction(action:InputAction):void {
+            // For click/press/key actions, add to buffer
+            if (action.type == InputAction.CLICK || action.type == InputAction.PRESS || action.type == InputAction.KEY) {
+                _inputBuffer.push(action.targetId);
                 if (DEBUG) {
                     trace("Input received: " + action.toString() + " - Buffer: " + _inputBuffer.join(","));
                 }

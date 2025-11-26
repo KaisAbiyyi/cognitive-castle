@@ -1,67 +1,362 @@
-# Week 2 – Detailed Task Breakdown
+# Week 2 – Siege Mechanics & Audio Sprint 🔥
 
 Branches:  
-- `feature/castle-logic/week-2`  
-- `feature/progression-algo/week-2`
+- `feature/siege-mechanic/week-2`  
+- `feature/audio-system/week-2`
 
-Primary owners: **Kais**, **Nazar**, **Jarwo**
+## 🎯 Scope Overview
 
-## Scope
-- Translate cognitive performance into **castle growth** (procedural visuals).
-- Implement early version of **adaptive progression** (1-Up / 2-Down style) and persistence of user/castle state.
+Week 2 fokus pada **stress mechanics** dan **audio/polish**:
+- ✅ Complete Siege/Entropy System (Random Timer + Attacks)
+- ✅ Fortify & Repair Mini-Games
+- ✅ Full Audio System (SFX + BGM)
+- ✅ Advanced Visual Effects
+- ✅ Achievement System
+- ✅ Tutorial/Onboarding Flow
+- ✅ Multiple Castle Themes
 
-## Tasks by Area
+**Target**: Game dengan tension mechanics dan full audio experience!
 
-### 1. Castle Visual Assets & Structure Model
-- [ ] Define castle component taxonomy (foundation, wall, tower, keep, decorative elements) *(Nazar)*
-- [ ] Create base vector assets or placeholder shapes for each component type *(Jarwo)*
-- [ ] Define data model for a castle element (e.g. `{id, type, tier, x, y, health}`) *(Jarwo)*
-- [ ] Decide on coordinate system and anchoring rules (grid vs free placement) *(Jarwo)*
-- [ ] Create a simple `CastleConfig` or constants file for thresholds (e.g. score ranges to unlock new tiers) *(Kais)*
+---
 
-### 2. `CastleArchitect` Core Logic
-- [ ] Implement `CastleArchitect` class skeleton (public API: `applyTrialResult(result)`, `getCastleState()`, `renderTo(container)`) *(Kais)*
-- [ ] Map cumulative score / streaks to **construction events** (e.g. every N correct trials adds a block) *(Jarwo)*
-- [ ] Implement logic for different “levels” of structure (foundation -> walls -> towers -> keep) *(Jarwo)*
-- [ ] Add basic handling for “damaged” vs “healthy” states (simple flag or enum) *(Jarwo)*
-- [ ] Ensure `CastleArchitect` can rebuild the full castle from a saved state object *(Kais)*
-- [ ] Add debug mode to instantly simulate several successful/failed trials and visualize resulting castle *(Jarwo)*
+## ⚔️ PHASE 1: Siege System & Mechanics ━ **KAIS** (Day 1-3)
 
-### 3. Construction Animation & Feedback
-- [ ] Implement tween/animation when a new block is added (scale-in or fade-in) *(Jarwo)*
-- [ ] Add simple particle or glow effect around newly constructed segments *(Jarwo)*
-- [ ] Ensure animations do not block the main game loop (non-blocking or callback-based) *(Jarwo)*
-- [ ] Add option to skip animations in a `FAST_DEV` or accessibility mode *(Kais)*
+**Owner: Kais** handles ALL siege logic, timers, and stress mechanics.
 
-### 4. Adaptive Progression Algorithm
-- [ ] Design configuration for difficulty levels (min/max span length, progression thresholds) *(Kais)*
-- [ ] Implement progression manager (e.g. `ProgressionController` or methods in gameplay controller) using 1-Up / 2-Down heuristic *(Kais)*
-- [ ] Track rolling accuracy over last N trials for more stable difficulty decisions *(Jarwo)*
-- [ ] Ensure minimum and maximum bounds for sequence length and difficulty tier are respected *(Jarwo)*
-- [ ] Expose current difficulty state to HUD (show span length / level number) *(Nazar)*
-- [ ] Log progression decisions to debug console for early balancing *(Jarwo)*
+### 1.1 Entropy Timer System
+- [ ] **T2-001**: Design timer configuration:
+  ```actionscript
+  class EntropyConfig {
+    minInterval: int,       // 45 seconds
+    maxInterval: int,       // 120 seconds
+    warningThreshold: int,  // 10 seconds before
+    gracePeriod: int,       // Early game protection
+    difficultyScaling: Number  // Timer gets faster
+  }
+  ```
+- [ ] **T2-002**: Implement `EntropyTimer` class:
+  - `start()`, `pause()`, `resume()`, `reset()`
+  - Random interval generation
+  - Warning event emission
+  - Attack event emission
+- [ ] **T2-003**: Handle app lifecycle (pause when minimized)
+- [ ] **T2-004**: Implement difficulty scaling (faster timers at higher levels)
 
-### 5. Save & Load System (`SharedObject`)
-- [ ] Define overall save schema (user metrics + castle state + settings) consistent with PRD *(Kais)*
-- [ ] Implement `SaveSystem` wrapper around `SharedObject` with `saveState()` and `loadState()` APIs *(Jarwo)*
-- [ ] Handle first-run case (no existing save; create default state) *(Jarwo)*
-- [ ] Ensure castle state serialization/deserialization works with `CastleArchitect` model *(Kais)*
-- [ ] Store key metrics: highest span, average accuracy, resilience score placeholders *(Kais)*
-- [ ] Add basic try/catch around SharedObject operations and log failures *(Jarwo)*
+### 1.2 Siege State Machine
+- [ ] **T2-005**: Design siege flow:
+  ```
+  NORMAL → WARNING → CHOICE → MINI_TASK → RESOLUTION → COOLDOWN → NORMAL
+  ```
+- [ ] **T2-006**: Implement `SiegeController`:
+  - State transitions
+  - Choice handling (Fortify vs Repair)
+  - Result processing
+  - Cooldown management
+- [ ] **T2-007**: Freeze main game during siege
+- [ ] **T2-008**: Implement siege history tracking
 
-### 6. Basic Anti-Tamper / Obfuscation
-- [ ] Implement lightweight obfuscation or checksum for saved data (e.g. hash of core fields) *(Kais)*
-- [ ] Validate save integrity at load time; if invalid, fallback to safe defaults *(Jarwo)*
-- [ ] Avoid storing any sensitive information (only local, non-personal metrics) *(Kais)*
+### 1.3 Consequence System
+- [ ] **T2-009**: Define penalty logic:
+  ```actionscript
+  class SiegePenalty {
+    damageAmount: int,       // Per structure
+    targetSelection: String, // "random", "newest", "weakest"
+    cascadeEffect: Boolean,  // Affects neighbors
+    recoveryTime: int        // Cooldown before next siege
+  }
+  ```
+- [ ] **T2-010**: Integrate with `CastleArchitect`:
+  - Remove/downgrade parts on failure
+  - Reinforce/upgrade on success
+- [ ] **T2-011**: Implement "last stand" mechanic (near-destruction warning)
+- [ ] **T2-012**: Add siege statistics to metrics
 
-### 7. Integration, Testing & Tuning
-- [ ] Integrate `CastleArchitect` calls into the main post-validation flow (trigger build events on correct trials) *(Jarwo)*
-- [ ] Integrate progression manager so sequence length updates over time instead of being static *(Kais)*
-- [ ] Verify that difficulty feels neither too easy nor too punishing over a 10–15 minute test session *(All)*
-- [ ] Test save/load by quitting and restarting app; confirm castle and progression resume correctly *(Jarwo)*
-- [ ] Adjust numeric constants (thresholds, mapping functions) based on feedback *(All)*
+### 1.4 Mini-Task: Fortify
+- [ ] **T2-013**: Design Fortify challenge:
+  - Longer sequence (current + 2)
+  - Higher stakes bonus
+  - Time pressure
+- [ ] **T2-014**: Implement Fortify task:
+  - Reuse sequence generation
+  - Reuse validation
+  - Custom difficulty modifier
+- [ ] **T2-015**: Success: Prevent damage + bonus shield
+- [ ] **T2-016**: Failure: Double damage
 
-### 8. Documentation & Cleanliness
-- [ ] Document `CastleArchitect`, progression controller, and save schema in short markdown or code comments *(Kais)*
-- [ ] Update `DEVELOPMENT_PLAN.md` to reflect completed Week 2 tasks *(Jarwo)*
-- [ ] Remove or gate any one-off debug buttons used during castle visualization experiments *(Jarwo)*
+### 1.5 Mini-Task: Repair
+- [ ] **T2-017**: Design Repair challenge:
+  - Speed-based matching
+  - Simpler patterns
+  - Quick reactions required
+- [ ] **T2-018**: Implement Repair task:
+  - Rapid-fire short sequences
+  - Timer per sequence
+  - Combo scoring
+- [ ] **T2-019**: Success: Restore 50% damage
+- [ ] **T2-020**: Failure: No additional penalty
+
+### 1.6 Balancing & Config
+- [ ] **T2-021**: First siege grace period (5 trials minimum)
+- [ ] **T2-022**: Cooldown between sieges (2-3 minutes)
+- [ ] **T2-023**: Difficulty curve tuning
+- [ ] **T2-024**: Debug tools for siege testing
+
+---
+
+## 🎵 PHASE 2: Audio System ━ **JARWO** (Day 2-4)
+
+**Owner: Jarwo** handles ALL audio implementation and management.
+
+### 2.1 Audio Architecture
+- [ ] **T2-025**: Implement `SoundManager`:
+  ```actionscript
+  class SoundManager {
+    // Playback
+    playSFX(id: String): void
+    playBGM(id: String, loop: Boolean): void
+    stopBGM(): void
+    stopAll(): void
+    
+    // Volume control
+    setMasterVolume(v: Number): void
+    setSFXVolume(v: Number): void
+    setBGMVolume(v: Number): void
+    
+    // State
+    mute(): void
+    unmute(): void
+    fadeOut(duration: Number): void
+  }
+  ```
+- [ ] **T2-026**: Implement sound pooling for performance
+- [ ] **T2-027**: Handle audio context (mobile requirements)
+- [ ] **T2-028**: Preload vs lazy-load strategy
+
+### 2.2 Sound Categories & Assets
+- [ ] **T2-029**: Define sound library:
+  ```actionscript
+  // UI Sounds
+  BUTTON_CLICK, BUTTON_HOVER, MENU_OPEN, MENU_CLOSE
+  
+  // Gameplay Sounds
+  STIMULUS_SHOW, INPUT_TAP, INPUT_CORRECT, INPUT_WRONG
+  SEQUENCE_COMPLETE, SEQUENCE_FAIL
+  TIMEOUT_WARNING, TIMEOUT_EXPIRE
+  
+  // Castle Sounds
+  BLOCK_PLACE, BLOCK_UPGRADE, BLOCK_DAMAGE, BLOCK_DESTROY
+  CONSTRUCTION_COMPLETE, CASTLE_CRUMBLE
+  
+  // Siege Sounds
+  SIEGE_WARNING, SIEGE_ALARM, SIEGE_ATTACK
+  FORTIFY_SUCCESS, REPAIR_SUCCESS
+  VICTORY_FANFARE, DEFEAT_SOUND
+  
+  // Ambient
+  BGM_MENU, BGM_GAMEPLAY, BGM_SIEGE, BGM_VICTORY
+  ```
+- [ ] **T2-030**: Source/create audio assets (royalty-free)
+- [ ] **T2-031**: Audio compression settings
+
+### 2.3 Sound Integration
+- [ ] **T2-032**: Hook sounds to game events:
+  - FSM state transitions
+  - Input actions
+  - Validation results
+- [ ] **T2-033**: Hook sounds to castle events:
+  - Construction
+  - Damage
+  - Upgrades
+- [ ] **T2-034**: Hook sounds to siege events:
+  - Warning phases
+  - Attack
+  - Resolution
+- [ ] **T2-035**: Dynamic music (intensity based on game state)
+
+### 2.4 Audio Settings
+- [ ] **T2-036**: Implement audio preferences:
+  - Master volume slider
+  - SFX volume slider
+  - BGM volume slider
+  - Mute toggle
+- [ ] **T2-037**: Persist audio settings in save data
+- [ ] **T2-038**: Audio accessibility (visual cues when muted)
+
+### 2.5 Achievement System
+- [ ] **T2-039**: Define achievements:
+  ```actionscript
+  class Achievement {
+    id: String,
+    name: String,
+    description: String,
+    icon: String,
+    requirement: Object,  // Condition to unlock
+    reward: Object,       // Bonus granted
+    isSecret: Boolean,
+    unlockedAt: Number
+  }
+  ```
+- [ ] **T2-040**: Achievement list (20+ achievements):
+  - First Correct Answer
+  - 10 Streak
+  - First Tower Built
+  - Survived First Siege
+  - Perfect Session (100% accuracy)
+  - Speed Demon (under 1s average)
+  - Castle Complete
+  - etc.
+- [ ] **T2-041**: Implement `AchievementManager`:
+  - Track progress
+  - Check unlock conditions
+  - Emit unlock events
+- [ ] **T2-042**: Achievement persistence
+
+### 2.6 Tutorial System
+- [ ] **T2-043**: Design onboarding flow:
+  - Welcome screen
+  - Stimulus explanation
+  - Input tutorial
+  - First guided trial
+  - Castle introduction
+  - Siege preview (later)
+- [ ] **T2-044**: Implement `TutorialManager`:
+  - Step tracking
+  - Skip option
+  - Resume capability
+- [ ] **T2-045**: Tutorial hints (contextual)
+- [ ] **T2-046**: First-run detection
+
+---
+
+## 🎨 PHASE 3: Visual Polish & Themes ━ **NAZAR** (Day 3-6)
+
+**Owner: Nazar** handles ALL visual polish, themes, and advanced effects.
+
+### 3.1 Siege UI/UX
+- [ ] **T2-047**: Design siege visual language:
+  - Screen tint (red/orange gradient)
+  - Edge vignette effect
+  - Pulsing border
+- [ ] **T2-048**: Implement `SiegeAlertView`:
+  - Countdown display
+  - Warning icons
+  - Intensity animation
+- [ ] **T2-049**: Screen shake implementation:
+  - Subtle (warning)
+  - Intense (attack)
+  - Configurable intensity
+- [ ] **T2-050**: Enemy visualization (abstract threat indicators)
+
+### 3.2 Defense Panel UI
+- [ ] **T2-051**: Create `DefensePanel`:
+  - Fortify button (shield icon)
+  - Repair button (wrench icon)
+  - Clear visual distinction
+  - Disable when inactive
+- [ ] **T2-052**: Button hover/press states
+- [ ] **T2-053**: Tooltip explanations
+- [ ] **T2-054**: Panel animation (slide in/out)
+
+### 3.3 Mini-Task UI
+- [ ] **T2-055**: Fortify task UI:
+  - High-pressure visual theme
+  - Larger countdown
+  - Stakes indicator
+- [ ] **T2-056**: Repair task UI:
+  - Speed-focused design
+  - Combo counter
+  - Progress bar
+
+### 3.4 Castle Themes
+- [ ] **T2-057**: Design theme system:
+  ```actionscript
+  class CastleTheme {
+    id: String,
+    name: String,
+    palette: Object,
+    partSprites: Object,
+    unlockRequirement: Object
+  }
+  ```
+- [ ] **T2-058**: Create themes:
+  - **Classic** (default stone castle)
+  - **Desert** (sandstone, pyramid style)
+  - **Ice** (frozen, crystal towers)
+  - **Dark** (obsidian, gothic)
+  - **Fantasy** (magical, floating elements)
+- [ ] **T2-059**: Theme-specific construction effects
+- [ ] **T2-060**: Theme unlock conditions
+
+### 3.5 Advanced Visual Effects
+- [ ] **T2-061**: Weather system:
+  - Clear (default)
+  - Rain (during siege warning)
+  - Storm (during siege attack)
+  - Snow (ice theme)
+- [ ] **T2-062**: Day/night cycle (aesthetic only)
+- [ ] **T2-063**: Ambient particles:
+  - Floating dust/leaves
+  - Fireflies (night)
+  - Snowflakes (ice theme)
+- [ ] **T2-064**: Camera effects:
+  - Subtle zoom on important events
+  - Pan to castle on construction
+
+### 3.6 Achievement UI
+- [ ] **T2-065**: Achievement popup:
+  - Trophy/badge icon
+  - Name and description
+  - Slide-in animation
+  - Auto-dismiss
+- [ ] **T2-066**: Achievement gallery screen:
+  - Grid of achievements
+  - Locked vs unlocked states
+  - Progress indicators
+- [ ] **T2-067**: Achievement detail view
+
+### 3.7 Tutorial Visuals
+- [ ] **T2-068**: Tutorial overlays:
+  - Highlight specific UI elements
+  - Dim rest of screen
+  - Arrow/pointer indicators
+- [ ] **T2-069**: Tutorial mascot/character (optional)
+- [ ] **T2-070**: Step indicator dots
+
+### 3.8 Polish & Testing
+- [ ] **T2-071**: Siege visual testing
+- [ ] **T2-072**: Theme consistency check
+- [ ] **T2-073**: Performance with effects
+- [ ] **T2-074**: Visual documentation
+
+---
+
+## 📋 Week 2 Deliverables
+
+| Feature | Owner | Target |
+|---------|-------|--------|
+| Entropy timer system | Kais | ✅ |
+| Siege state machine | Kais | ✅ |
+| Fortify mini-game | Kais | ✅ |
+| Repair mini-game | Kais | ✅ |
+| Penalty/reward system | Kais | ✅ |
+| Full SoundManager | Jarwo | ✅ |
+| 30+ sound effects | Jarwo | ✅ |
+| BGM tracks | Jarwo | ✅ |
+| Achievement system (20+) | Jarwo | ✅ |
+| Tutorial/onboarding | Jarwo | ✅ |
+| Siege UI/UX | Nazar | ✅ |
+| Defense panel | Nazar | ✅ |
+| 5 castle themes | Nazar | ✅ |
+| Weather effects | Nazar | ✅ |
+| Achievement UI | Nazar | ✅ |
+
+---
+
+## 📊 Success Criteria
+
+- **Siege**: Complete flow works without breaking game
+- **Audio**: All events have appropriate sounds
+- **Achievements**: 20+ trackable, unlockable achievements
+- **Themes**: 5 distinct visual themes
+- **Tutorial**: New player can learn game in under 2 minutes
+- **Performance**: 60 FPS maintained with all effects
