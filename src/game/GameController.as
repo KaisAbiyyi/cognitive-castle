@@ -11,6 +11,14 @@ package game {
     import generation.SequenceGenerator;
     import input.InputManager;
     import domain.StimulusItem;
+    import domain.TrialResult;
+    import castle.CastleArchitect;
+    import castle.CastleView;
+    import castle.CastlePanel;
+    import castle.CastleConfig;
+    import castle.BuildEvent;
+    import castle.EffectsManager;
+    import castle.MetricsManager;
 
     /**
      * GameController - Manages the game loop finite state machine and orchestrates all game components.
@@ -45,6 +53,18 @@ package game {
         private var _inputManager:InputManager;
         // private var _stimulusView:StimulusView; // Stub - implemented in Area 2
         // private var _validator:Validator; // Stub - implemented in Area 4
+        
+        // Castle components
+        private var _castleArchitect:CastleArchitect;
+        private var _castleView:CastleView;
+        private var _castlePanel:CastlePanel;
+        private var _effectsManager:EffectsManager;
+        private var _metricsManager:MetricsManager;
+        
+        // Streak tracking
+        private var _currentStreak:int = 0;
+        private var _trialStartTime:Number = 0;
+        private var _inputStartTime:Number = 0;
 
         // Game data
         private var _currentSequence:Vector.<StimulusItem>;
@@ -82,6 +102,10 @@ package game {
             _inputManager = InputManager.getInstance();
             _autoAdvanceTimer = new Timer(RESULT_DISPLAY_TIME, 1);
             _autoAdvanceTimer.addEventListener(TimerEvent.TIMER_COMPLETE, onAutoAdvance);
+            
+            // Initialize castle system
+            _castleArchitect = new CastleArchitect();
+            _metricsManager = MetricsManager.getInstance();
         }
 
         /**
@@ -92,7 +116,44 @@ package game {
             _hud = hud;
             createStimulusDisplay();
             createUserInputDisplay();
+            initializeCastleUI();
             enterState(STATE_IDLE);
+            
+            // Start metrics session
+            _metricsManager.startSession();
+        }
+        
+        /**
+         * Initialize castle view and panel
+         */
+        private function initializeCastleUI():void {
+            if (!_hud.parent) return;
+            
+            var stage:* = _hud.parent.stage || _hud.parent;
+            
+            // Create castle view (left side)
+            _castleView = new CastleView(200, 180);
+            _castleView.x = 10;
+            _castleView.y = 60;
+            _hud.parent.addChild(_castleView);
+            
+            // Create castle panel (right side)
+            _castlePanel = new CastlePanel(180, 140);
+            _castlePanel.x = stage.stageWidth - 190;
+            _castlePanel.y = 60;
+            _hud.parent.addChild(_castlePanel);
+            
+            // Create effects manager with parent
+            _effectsManager = EffectsManager.getInstance();
+            _effectsManager.setParent(_hud.parent as Sprite);
+            
+            // Initial render
+            _castleView.render(_castleArchitect.state);
+            _castlePanel.updateFromState(_castleArchitect.state, _currentStreak);
+            
+            if (DEBUG) {
+                trace("Castle UI initialized");
+            }
         }
 
         /**
@@ -289,6 +350,9 @@ package game {
             if (_nextTrialButton) {
                 _nextTrialButton.visible = false;
             }
+            
+            // Record trial start time
+            _trialStartTime = new Date().getTime();
 
             // Generate sequence
             _currentSequence = _sequenceGenerator.generateSequence(_hud.getLevel());
@@ -366,6 +430,9 @@ package game {
         private function onEnterInput():void {
             _hud.setStateText("Answer");
             _hud.setInstructionText("Reproduce the sequence by clicking the buttons in order.");
+            
+            // Record input start time
+            _inputStartTime = new Date().getTime();
 
             // Show user input display
             _userInputDisplay.text = "Your input: ";
@@ -480,6 +547,18 @@ package game {
          */
         private function onEnterResult():void {
             _trialCount++;
+            var now:Number = new Date().getTime();
+            
+            // Calculate reaction time
+            var reactionTime:Number = now - _inputStartTime;
+            var totalTime:Number = now - _trialStartTime;
+            
+            // Update streak
+            if (_isCorrect) {
+                _currentStreak++;
+            } else {
+                _currentStreak = 0;
+            }
 
             // Build comparison text
             var expectedIds:Array = [];
@@ -491,26 +570,127 @@ package game {
                 userIds.push(String(id + 1)); // 1-indexed
             }
             
+            // Create TrialResult for castle system
+            var trialResult:TrialResult = new TrialResult();
+            trialResult.isCorrect = _isCorrect;
+            trialResult.reactionTime = reactionTime;
+            trialResult.totalTime = totalTime;
+            trialResult.sequenceLength = _currentSequence.length;
+            trialResult.difficulty = _hud.getLevel();
+            trialResult.expected = expectedIds;
+            trialResult.actual = userIds;
+            trialResult.streakAfter = _currentStreak;
+            trialResult.totalItems = _currentSequence.length;
+            trialResult.correctItems = _isCorrect ? _currentSequence.length : countCorrectItems();
+            trialResult.accuracy = trialResult.totalItems > 0 ? trialResult.correctItems / trialResult.totalItems : 0;
+            
+            // Calculate score using CastleConfig
+            trialResult.scoreEarned = CastleConfig.calculateTrialPoints(_isCorrect, _currentStreak, _hud.getLevel());
+            
+            // Apply to castle system
+            var buildEvents:Vector.<BuildEvent> = _castleArchitect.applyTrialResult(trialResult);
+            
+            // Record in metrics
+            _metricsManager.recordTrial(trialResult);
+            
+            // Process build events for effects
+            processBuildEvents(buildEvents, trialResult.scoreEarned);
+            
+            // Update castle view and panel
+            updateCastleDisplay();
+            
             var comparisonText:String = "\nExpected: " + expectedIds.join(", ") + 
                                        "\nYou entered: " + userIds.join(", ");
 
             if (_isCorrect) {
                 _hud.setScore(_hud.getScore() + 1);
-                _hud.setStateText("Correct!");
+                _hud.setStateText("Correct! +" + trialResult.scoreEarned + " pts");
                 _hud.setInstructionText("Well done! Sequence completed successfully." + comparisonText);
                 if (DEBUG) {
-                    trace("Trial " + _trialCount + ": CORRECT");
+                    trace("Trial " + _trialCount + ": CORRECT - +" + trialResult.scoreEarned + " pts, Streak: " + _currentStreak);
                 }
             } else {
                 _hud.setStateText("Incorrect");
                 _hud.setInstructionText("Try again. Watch carefully next time." + comparisonText);
                 if (DEBUG) {
-                    trace("Trial " + _trialCount + ": INCORRECT");
+                    trace("Trial " + _trialCount + ": INCORRECT - Streak reset");
                 }
             }
 
             // Auto-advance to next state after delay
             _autoAdvanceTimer.start();
+        }
+        
+        /**
+         * Count correct items for partial accuracy
+         */
+        private function countCorrectItems():int {
+            var count:int = 0;
+            var minLen:int = Math.min(_currentSequence.length, _userInput.length);
+            for (var i:int = 0; i < minLen; i++) {
+                if (_currentSequence[i].id == _userInput[i]) {
+                    count++;
+                }
+            }
+            return count;
+        }
+        
+        /**
+         * Process build events and show effects
+         */
+        private function processBuildEvents(events:Vector.<BuildEvent>, score:int):void {
+            if (!_effectsManager || !_castleView) return;
+            
+            var centerPos:* = _castleView.getCenter();
+            var cx:Number = _castleView.x + centerPos.x;
+            var cy:Number = _castleView.y + centerPos.y;
+            
+            for each (var event:BuildEvent in events) {
+                switch (event.type) {
+                    case BuildEvent.TYPE_PART_ADDED:
+                        _effectsManager.playConstructionEffect(cx, cy, event.part.type);
+                        _metricsManager.recordPartBuilt();
+                        break;
+                        
+                    case BuildEvent.TYPE_PART_UPGRADED:
+                        _effectsManager.playUpgradeEffect(cx, cy, event.part.tier);
+                        _metricsManager.recordPartUpgraded();
+                        break;
+                        
+                    case BuildEvent.TYPE_PART_DAMAGED:
+                        _effectsManager.playDamageEffect(cx, cy, event.scoreDelta);
+                        break;
+                        
+                    case BuildEvent.TYPE_MILESTONE_REACHED:
+                        _effectsManager.showMilestoneNotification(event.milestoneId, cx, cy - 40);
+                        if (_castlePanel) {
+                            _castlePanel.showMilestoneReached(event.milestoneId);
+                        }
+                        break;
+                }
+            }
+            
+            // Show score popup for correct answers
+            if (score > 0) {
+                _effectsManager.playCorrectEffect(cx, cy - 20, score);
+                
+                // Show streak effect for streaks of 3+
+                if (_currentStreak >= 3) {
+                    _effectsManager.playStreakEffect(cx, cy - 60, _currentStreak);
+                }
+            }
+        }
+        
+        /**
+         * Update castle display
+         */
+        private function updateCastleDisplay():void {
+            if (_castleView) {
+                _castleView.render(_castleArchitect.state);
+            }
+            if (_castlePanel) {
+                _castlePanel.updateFromState(_castleArchitect.state, _currentStreak);
+            }
         }
 
         /**
