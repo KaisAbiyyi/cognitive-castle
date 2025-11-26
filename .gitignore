@@ -6,7 +6,7 @@ bin/*.exe
 bin/*.tmp
 bin-debug/
 bin-release/
-
+docs
 # --- VS Code Settings (PENTING UNTUK TIM) ---
 # Karena launch.json berisi path absolut ke SDK komputer Kais,
 # file ini TIDAK BOLEH di-share via Git. Setiap orang harus setting sendiri.

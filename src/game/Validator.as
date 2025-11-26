@@ -104,8 +104,8 @@ package game {
                     processed.reverse();
                     break;
                 case MODE_SORT:
-                    // Sort by some criteria (e.g., symbol name)
-                    processed.sort(compareBySymbol);
+                    // Sort by value (numerical order for cognitive task)
+                    processed.sort(compareByShape);
                     break;
                 case MODE_FORWARD:
                 default:
@@ -137,14 +137,14 @@ package game {
         }
 
         /**
-         * Compare function for sorting by symbol
+         * Compare function for sorting by shape
          * @param a First item
          * @param b Second item
          * @return Comparison result
          */
-        private function compareBySymbol(a:StimulusItem, b:StimulusItem):int {
-            if (a.symbol < b.symbol) return -1;
-            if (a.symbol > b.symbol) return 1;
+        private function compareByShape(a:StimulusItem, b:StimulusItem):int {
+            if (a.shape < b.shape) return -1;
+            if (a.shape > b.shape) return 1;
             return 0;
         }
     }

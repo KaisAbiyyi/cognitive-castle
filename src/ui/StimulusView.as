@@ -113,8 +113,8 @@ package ui {
             var graphics:* = _currentShape.graphics;
             graphics.beginFill(item.color);
 
-            // Draw based on symbol
-            switch (item.symbol) {
+            // Draw based on shape
+            switch (item.shape) {
                 case "circle":
                     graphics.drawCircle(0, 0, StimulusConfig.STIMULUS_SIZE / 2);
                     break;
