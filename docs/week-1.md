@@ -331,11 +331,11 @@ Week 1 mencakup **SELURUH foundation game**:
 
 ### 3.6 Menu System
 
-- [x] **T1-078**: Main Menu:
+- [ ] **T1-078**: Main Menu:
   - Play / Continue
   - Settings, Statistics, Credits
-- [x] **T1-079**: Pause Menu
-- [x] **T1-080**: Settings Panel:
+- [ ] **T1-079**: Pause Menu
+- [ ] **T1-080**: Settings Panel:
   - Volume sliders
   - Haptic toggle
   - Color blind mode

@@ -14,6 +14,9 @@ package {
     import config.StimulusConfig;
     import ui.GameScreen;
     import ui.TrialPopup;
+    import ui.MainMenu;
+    import ui.SettingsMenu;
+    import ui.AboutUsPanel;
     import castle.EffectsManager;
 
     /**
@@ -30,6 +33,9 @@ package {
         private static const DEBUG:Boolean = true;
 
         // UI Components
+        private var _mainMenu:MainMenu;
+        private var _settingsMenu:SettingsMenu;
+        private var _aboutUsPanel:AboutUsPanel;
         private var _gameScreen:GameScreen;
         private var _trialPopup:TrialPopup;
         private var _effectsManager:EffectsManager;
@@ -38,6 +44,9 @@ package {
         private var _currentDifficulty:int = 1;
         private var _correctStreak:int = 0;
         private var _wrongStreak:int = 0;
+        
+        // State
+        private var _isInGame:Boolean = false;
 
         public function Main() {
             // 1. Setup stage
@@ -48,8 +57,8 @@ package {
             // 2. Update config
             StimulusConfig.updateForStageSize(stage.stageWidth, stage.stageHeight);
             
-            // 3. Initialize components
-            initializeComponents();
+            // 3. Initialize components - start with menu
+            initializeMenu();
 
             if (DEBUG) {
                 trace("===== COGNITIVE CASTLE STARTED =====");
@@ -63,6 +72,19 @@ package {
             if (DEBUG) {
                 trace("Stage resized to: " + stage.stageWidth + "x" + stage.stageHeight);
             }
+            
+            // Resize menu components
+            if (_mainMenu) {
+                _mainMenu.resize(stage.stageWidth, stage.stageHeight);
+            }
+            if (_settingsMenu) {
+                _settingsMenu.resize(stage.stageWidth, stage.stageHeight);
+            }
+            if (_aboutUsPanel) {
+                _aboutUsPanel.resize(stage.stageWidth, stage.stageHeight);
+            }
+            
+            // Resize game components
             if (_gameScreen) {
                 _gameScreen.onResize(stage.stageWidth, stage.stageHeight);
             }
@@ -70,8 +92,125 @@ package {
                 _trialPopup.resize(stage.stageWidth, stage.stageHeight);
             }
         }
+        
+        /**
+         * Initialize main menu system
+         */
+        private function initializeMenu():void {
+            // Create main menu
+            _mainMenu = new MainMenu();
+            _mainMenu.initialize(stage.stageWidth, stage.stageHeight);
+            _mainMenu.addEventListener(MainMenu.PLAY_CLICKED, onPlayClicked);
+            _mainMenu.addEventListener(MainMenu.SETTINGS_CLICKED, onSettingsClicked);
+            _mainMenu.addEventListener(MainMenu.ABOUT_US_CLICKED, onAboutUsClicked);
+            addChild(_mainMenu);
+            
+            // Create settings menu (hidden)
+            _settingsMenu = new SettingsMenu();
+            _settingsMenu.initialize(stage.stageWidth, stage.stageHeight);
+            _settingsMenu.addEventListener(SettingsMenu.CLOSE_CLICKED, onSettingsClose);
+            _settingsMenu.addEventListener(SettingsMenu.SETTINGS_CHANGED, onSettingsChanged);
+            addChild(_settingsMenu);
+            
+            // Create about us panel (hidden)
+            _aboutUsPanel = new AboutUsPanel();
+            _aboutUsPanel.initialize(stage.stageWidth, stage.stageHeight);
+            _aboutUsPanel.addEventListener(AboutUsPanel.CLOSE_CLICKED, onAboutUsClose);
+            addChild(_aboutUsPanel);
+            
+            if (DEBUG) {
+                trace("[Main] Menu system initialized");
+            }
+        }
+        
+        /**
+         * Handle Play button click
+         */
+        private function onPlayClicked(event:Event):void {
+            if (DEBUG) {
+                trace("[Main] Play clicked - starting game");
+            }
+            
+            // Hide menu
+            _mainMenu.hide();
+            
+            // Initialize game after menu animation
+            _mainMenu.addEventListener(Event.ENTER_FRAME, checkMenuHidden);
+        }
+        
+        private function checkMenuHidden(e:Event):void {
+            if (_mainMenu.alpha <= 0) {
+                _mainMenu.removeEventListener(Event.ENTER_FRAME, checkMenuHidden);
+                initializeGame();
+            }
+        }
+        
+        /**
+         * Handle Settings button click
+         */
+        private function onSettingsClicked(event:Event):void {
+            if (DEBUG) {
+                trace("[Main] Settings clicked");
+            }
+            // Hide main menu and show settings page
+            _mainMenu.visible = false;
+            _settingsMenu.show();
+        }
+        
+        /**
+         * Handle Settings close
+         */
+        private function onSettingsClose(event:Event):void {
+            if (DEBUG) {
+                trace("[Main] Settings closed - back to menu");
+            }
+            _settingsMenu.hide();
+            // Show main menu again
+            _mainMenu.visible = true;
+            _mainMenu.alpha = 1;
+        }
+        
+        /**
+         * Handle Settings changed
+         */
+        private function onSettingsChanged(event:Event):void {
+            if (DEBUG) {
+                trace("[Main] Settings changed - Music: " + _settingsMenu.musicVolume + ", SFX: " + _settingsMenu.sfxVolume);
+            }
+            // TODO: Apply volume settings to sound system
+        }
+        
+        /**
+         * Handle About Us button click
+         */
+        private function onAboutUsClicked(event:Event):void {
+            if (DEBUG) {
+                trace("[Main] About Us clicked");
+            }
+            // Hide main menu and show about us page
+            _mainMenu.visible = false;
+            _aboutUsPanel.show();
+        }
+        
+        /**
+         * Handle About Us close
+         */
+        private function onAboutUsClose(event:Event):void {
+            if (DEBUG) {
+                trace("[Main] About Us closed - back to menu");
+            }
+            _aboutUsPanel.hide();
+            // Show main menu again
+            _mainMenu.visible = true;
+            _mainMenu.alpha = 1;
+        }
 
-        private function initializeComponents():void {
+        /**
+         * Initialize game components
+         */
+        private function initializeGame():void {
+            _isInGame = true;
+            
             // Create game screen
             _gameScreen = new GameScreen();
             _gameScreen.initialize(stage.stageWidth, stage.stageHeight);
@@ -89,6 +228,10 @@ package {
             // Effects manager
             _effectsManager = EffectsManager.getInstance();
             _effectsManager.setParent(this);
+            
+            if (DEBUG) {
+                trace("[Main] Game initialized");
+            }
         }
         
         /**

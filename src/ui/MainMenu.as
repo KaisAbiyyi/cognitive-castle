@@ -12,9 +12,10 @@ package ui {
     import flash.events.MouseEvent;
     import flash.filters.DropShadowFilter;
     import flash.filters.GlowFilter;
+    import flash.utils.Dictionary;
     
     /**
-     * MainMenu - Main menu screen with Play, Settings, Statistics, Credits.
+     * MainMenu - Main menu screen with Play, Settings, About Us.
      * Features animated title, menu buttons, and background castle silhouette.
      * 
      * T1-078: Main Menu
@@ -23,10 +24,8 @@ package ui {
         
         // Events
         public static const PLAY_CLICKED:String = "playClicked";
-        public static const CONTINUE_CLICKED:String = "continueClicked";
         public static const SETTINGS_CLICKED:String = "settingsClicked";
-        public static const STATISTICS_CLICKED:String = "statisticsClicked";
-        public static const CREDITS_CLICKED:String = "creditsClicked";
+        public static const ABOUT_US_CLICKED:String = "aboutUsClicked";
         
         // Dimensions
         private var _stageWidth:Number;
@@ -42,26 +41,28 @@ package ui {
         private var _buttons:Vector.<Sprite>;
         private var _versionText:TextField;
         
-        // State
-        private var _hasSaveData:Boolean = false;
-        
-        // Animation
-        private var _animPhase:Number = 0;
+        // Hover animation
+        private var _buttonTargetScale:Dictionary;
+        private var _buttonCurrentGlow:Dictionary;
+        private static const HOVER_SCALE:Number = 1.08;
+        private static const NORMAL_SCALE:Number = 1.0;
+        private static const HOVER_EASE:Number = 0.15;
         
         /**
          * Constructor
          */
         public function MainMenu() {
             _buttons = new Vector.<Sprite>();
+            _buttonTargetScale = new Dictionary();
+            _buttonCurrentGlow = new Dictionary();
         }
         
         /**
          * Initialize menu
          */
-        public function initialize(stageWidth:Number, stageHeight:Number, hasSaveData:Boolean = false):void {
+        public function initialize(stageWidth:Number, stageHeight:Number):void {
             _stageWidth = stageWidth;
             _stageHeight = stageHeight;
-            _hasSaveData = hasSaveData;
             
             createBackground();
             createCastleSilhouette();
@@ -237,22 +238,16 @@ package ui {
         private function createMenuButtons():void {
             _buttonsContainer = new Sprite();
             
-            var buttonData:Array = [];
+            var buttonData:Array = [
+                { label: "PLAY", event: PLAY_CLICKED, primary: true },
+                { label: "SETTINGS", event: SETTINGS_CLICKED, primary: false },
+                { label: "ABOUT US", event: ABOUT_US_CLICKED, primary: false }
+            ];
             
-            if (_hasSaveData) {
-                buttonData.push({ label: "CONTINUE", event: CONTINUE_CLICKED, primary: true });
-                buttonData.push({ label: "NEW GAME", event: PLAY_CLICKED, primary: false });
-            } else {
-                buttonData.push({ label: "PLAY", event: PLAY_CLICKED, primary: true });
-            }
-            
-            buttonData.push({ label: "SETTINGS", event: SETTINGS_CLICKED, primary: false });
-            buttonData.push({ label: "STATISTICS", event: STATISTICS_CLICKED, primary: false });
-            buttonData.push({ label: "CREDITS", event: CREDITS_CLICKED, primary: false });
-            
-            var buttonWidth:Number = Math.min(_stageWidth * 0.4, 250);
-            var buttonHeight:Number = Math.min(_stageHeight * 0.08, 50);
-            var spacing:Number = 15;
+            // Responsive button sizing based on stage dimensions
+            var buttonWidth:Number = Math.max(200, Math.min(_stageWidth * 0.35, 300));
+            var buttonHeight:Number = Math.max(45, Math.min(_stageHeight * 0.08, 60));
+            var spacing:Number = Math.max(12, _stageHeight * 0.02);
             var startY:Number = 0;
             
             for (var i:int = 0; i < buttonData.length; i++) {
@@ -263,8 +258,9 @@ package ui {
                     buttonHeight,
                     buttonData[i].primary
                 );
-                btn.x = (_stageWidth - buttonWidth) / 2;
-                btn.y = startY + i * (buttonHeight + spacing);
+                // Position button center (since button is drawn centered at origin)
+                btn.x = _stageWidth / 2;
+                btn.y = startY + i * (buttonHeight + spacing) + buttonHeight / 2;
                 _buttonsContainer.addChild(btn);
                 _buttons.push(btn);
             }
@@ -287,22 +283,33 @@ package ui {
             var bgColor:uint = primary ? 0x4A90E2 : 0x2C3E50;
             var borderColor:uint = primary ? 0x357ABD : 0x1A252F;
             
-            // Background
+            // Background container for filters (separate from text)
+            var bgContainer:Sprite = new Sprite();
+            bgContainer.name = "bgContainer";
+            
+            // Background - draw centered at origin for proper scaling
             var bg:Shape = new Shape();
             var g:Graphics = bg.graphics;
             
-            g.lineStyle(2, borderColor);
+            // Responsive border and corner radius
+            var borderWidth:Number = Math.max(2, width * 0.008);
+            var cornerRadius:Number = Math.max(8, height * 0.2);
+            
+            g.lineStyle(borderWidth, borderColor);
             g.beginFill(bgColor);
-            g.drawRoundRect(0, 0, width, height, 10, 10);
+            g.drawRoundRect(-width / 2, -height / 2, width, height, cornerRadius, cornerRadius);
             g.endFill();
             
-            btn.addChild(bg);
+            bgContainer.addChild(bg);
+            bgContainer.filters = [new DropShadowFilter(3, 45, 0x000000, 0.4, 6, 6)];
+            btn.addChild(bgContainer);
             
-            // Label
+            // Label - centered with responsive font size
             var labelTF:TextField = new TextField();
             var format:TextFormat = new TextFormat();
             format.font = "Arial";
-            var fontSize:int = primary ? 20 : 16;
+            // Responsive font size based on button height
+            var fontSize:int = primary ? Math.max(16, Math.min(height * 0.4, 24)) : Math.max(14, Math.min(height * 0.35, 20));
             format.size = fontSize;
             format.color = 0xFFFFFF;
             format.bold = true;
@@ -312,14 +319,16 @@ package ui {
             labelTF.text = label;
             labelTF.width = width;
             labelTF.height = height;
-            labelTF.y = (height - fontSize - 8) / 2;
+            labelTF.x = -width / 2;
+            labelTF.y = -height / 2 + (height - fontSize - 8) / 2;
             labelTF.selectable = false;
             labelTF.mouseEnabled = false;
             
             btn.addChild(labelTF);
             
-            // Shadow
-            btn.filters = [new DropShadowFilter(3, 45, 0x000000, 0.4, 6, 6)];
+            // Initialize hover animation state
+            _buttonTargetScale[btn] = NORMAL_SCALE;
+            _buttonCurrentGlow[btn] = 0.0;
             
             // Interactions
             btn.buttonMode = true;
@@ -356,19 +365,16 @@ package ui {
         
         private function onButtonOver(e:MouseEvent):void {
             var btn:Sprite = e.currentTarget as Sprite;
-            btn.scaleX = 1.05;
-            btn.scaleY = 1.05;
-            btn.filters = [
-                new DropShadowFilter(5, 45, 0x000000, 0.5, 10, 10),
-                new GlowFilter(0x4A90E2, 0.4, 20, 20)
-            ];
+            var bgContainer:Sprite = btn.getChildByName("bgContainer") as Sprite;
+            _buttonTargetScale[btn] = HOVER_SCALE;
+            _buttonCurrentGlow[btn] = 1.0;
         }
         
         private function onButtonOut(e:MouseEvent):void {
             var btn:Sprite = e.currentTarget as Sprite;
-            btn.scaleX = 1.0;
-            btn.scaleY = 1.0;
-            btn.filters = [new DropShadowFilter(3, 45, 0x000000, 0.4, 6, 6)];
+            var bgContainer:Sprite = btn.getChildByName("bgContainer") as Sprite;
+            _buttonTargetScale[btn] = NORMAL_SCALE;
+            _buttonCurrentGlow[btn] = 0.0;
         }
         
         private function onButtonClick(e:MouseEvent):void {
@@ -379,31 +385,57 @@ package ui {
         // ============ ANIMATION ============
         
         private function onEnterFrame(e:Event):void {
-            _animPhase += 0.02;
-            
-            // Gentle title float animation
-            if (_titleContainer) {
-                _titleContainer.y = _stageHeight * 0.12 + Math.sin(_animPhase) * 5;
+            // Smooth button hover animation - scale entire button including text
+            for each (var btn:Sprite in _buttons) {
+                var bgContainer:Sprite = btn.getChildByName("bgContainer") as Sprite;
+                if (!bgContainer) continue;
+                
+                var targetScale:Number = _buttonTargetScale[btn] != null ? _buttonTargetScale[btn] : NORMAL_SCALE;
+                
+                // Calculate difference using button scale (entire button)
+                var diff:Number = targetScale - btn.scaleX;
+                
+                // Only animate if difference is significant
+                if (Math.abs(diff) > 0.001) {
+                    // Use fixed step animation instead of easing to prevent jitter
+                    var step:Number = 0.012; // Fixed increment per frame
+                    var newScale:Number;
+                    
+                    if (diff > 0) {
+                        newScale = Math.min(btn.scaleX + step, targetScale);
+                    } else {
+                        newScale = Math.max(btn.scaleX - step, targetScale);
+                    }
+                    
+                    btn.scaleX = newScale;
+                    btn.scaleY = newScale;
+                } else if (btn.scaleX != targetScale) {
+                    // Snap to exact target
+                    btn.scaleX = targetScale;
+                    btn.scaleY = targetScale;
+                }
+                
+                // Update glow filter on background (only when hover state changes)
+                var isHovered:Boolean = (targetScale > NORMAL_SCALE);
+                var currentlyGlowing:Boolean = (_buttonCurrentGlow[btn] > 0.5);
+                
+                // Only update filters when hover state actually changes
+                if (isHovered != currentlyGlowing) {
+                    _buttonCurrentGlow[btn] = isHovered ? 1.0 : 0.0;
+                    
+                    if (isHovered) {
+                        bgContainer.filters = [
+                            new DropShadowFilter(5, 45, 0x000000, 0.5, 12, 12),
+                            new GlowFilter(0x4A90E2, 0.5, 25, 25)
+                        ];
+                    } else {
+                        bgContainer.filters = [new DropShadowFilter(3, 45, 0x000000, 0.4, 6, 6)];
+                    }
+                }
             }
         }
         
         // ============ PUBLIC METHODS ============
-        
-        /**
-         * Update for save data presence
-         */
-        public function setHasSaveData(hasSave:Boolean):void {
-            if (_hasSaveData != hasSave) {
-                _hasSaveData = hasSave;
-                
-                // Rebuild buttons
-                if (_buttonsContainer) {
-                    removeChild(_buttonsContainer);
-                    _buttons.length = 0;
-                }
-                createMenuButtons();
-            }
-        }
         
         /**
          * Resize handler
@@ -426,14 +458,30 @@ package ui {
                 _titleContainer.y = _stageHeight * 0.12;
                 _titleText.width = _stageWidth;
                 _subtitleText.width = _stageWidth;
+                
+                // Update title font size responsively
+                var titleFormat:TextFormat = _titleText.getTextFormat();
+                titleFormat.size = Math.max(32, Math.min(_stageWidth * 0.05, 64));
+                _titleText.setTextFormat(titleFormat);
+                
+                var subFormat:TextFormat = _subtitleText.getTextFormat();
+                subFormat.size = Math.max(12, Math.min(_stageWidth * 0.018, 18));
+                _subtitleText.setTextFormat(subFormat);
             }
             
-            // Reposition buttons
+            // Rebuild buttons with new responsive sizes
             if (_buttonsContainer) {
-                var buttonHeight:Number = Math.min(_stageHeight * 0.08, 50);
-                var spacing:Number = 15;
-                var totalHeight:Number = _buttons.length * buttonHeight + (_buttons.length - 1) * spacing;
-                _buttonsContainer.y = (_stageHeight - totalHeight) / 2 + 30;
+                // Remove old buttons and clear references
+                for each (var oldBtn:Sprite in _buttons) {
+                    oldBtn.removeEventListener(MouseEvent.ROLL_OVER, onButtonOver);
+                    oldBtn.removeEventListener(MouseEvent.ROLL_OUT, onButtonOut);
+                    oldBtn.removeEventListener(MouseEvent.CLICK, onButtonClick);
+                }
+                removeChild(_buttonsContainer);
+                _buttons = new Vector.<Sprite>();
+                
+                // Recreate buttons with new dimensions
+                createMenuButtons();
             }
             
             if (_versionText) {

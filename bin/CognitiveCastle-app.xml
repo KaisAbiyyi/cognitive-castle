@@ -10,6 +10,9 @@
         <visible>true</visible>
         <width>1280</width>
         <height>720</height>
+        <minimumSize>640 360</minimumSize>
+        <maximizable>true</maximizable>
+        <resizable>true</resizable>
         <fullScreen>false</fullScreen>
         <autoOrients>true</autoOrients>
         <aspectRatio>landscape</aspectRatio>
