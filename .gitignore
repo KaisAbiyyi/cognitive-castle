@@ -22,4 +22,6 @@ docs
 Thumbs.db
 
 # --- Local History (Jika ada extension local history) ---
-.history/
+.history/# Video files (too large for GitHub)
+assets/*.mp4
+bin/assets/*.mp4

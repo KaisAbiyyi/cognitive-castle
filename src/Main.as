@@ -7,6 +7,17 @@ package {
     import flash.display.StageScaleMode;
     import flash.events.Event;
     import flash.events.MouseEvent;
+    import flash.events.AsyncErrorEvent;
+    import flash.events.NetStatusEvent;
+    import flash.events.StageVideoAvailabilityEvent;
+    import flash.events.StageVideoEvent;
+    import flash.net.NetConnection;
+    import flash.net.NetStream;
+    import flash.media.Video;
+    import flash.media.StageVideo;
+    import flash.geom.Rectangle;
+    import flash.filesystem.File;
+    import flash.utils.getTimer;
     import generation.SequenceGenerator;
     import input.InputManager;
     import domain.StimulusItem;
@@ -31,6 +42,21 @@ package {
     public class Main extends Sprite {
         // Debug flag
         private static const DEBUG:Boolean = true;
+
+        // Video Components
+        private var _videoContainer:Sprite;
+        private var _video:Video;
+        private var _stageVideo:StageVideo;
+        private var _useStageVideo:Boolean = false;
+        private var _netConnection:NetConnection;
+        private var _netStream:NetStream;
+        private var _videoCompleted:Boolean = false;
+        private var _skipButton:Sprite;
+        private var _skipButtonVisible:Boolean = false;
+        private var _videoStartTime:Number = 0;
+        private var _videoDuration:Number = 0;
+        private var _videoOriginalWidth:Number = 0;
+        private var _videoOriginalHeight:Number = 0;
 
         // UI Components
         private var _mainMenu:MainMenu;
@@ -57,8 +83,8 @@ package {
             // 2. Update config
             StimulusConfig.updateForStageSize(stage.stageWidth, stage.stageHeight);
             
-            // 3. Initialize components - start with menu
-            initializeMenu();
+            // 3. Play opening video first
+            playOpeningVideo();
 
             if (DEBUG) {
                 trace("===== COGNITIVE CASTLE STARTED =====");
@@ -67,10 +93,371 @@ package {
                 trace("====================================");
             }
         }
+        
+        /**
+         * Play opening video before showing menu
+         */
+        private function playOpeningVideo():void {
+            if (DEBUG) {
+                trace("[Main] Playing opening video...");
+            }
+            
+            // Setup net connection FIRST
+            _netConnection = new NetConnection();
+            _netConnection.connect(null);
+            
+            // Setup net stream
+            _netStream = new NetStream(_netConnection);
+            _netStream.addEventListener(NetStatusEvent.NET_STATUS, onVideoStatus);
+            _netStream.addEventListener(AsyncErrorEvent.ASYNC_ERROR, onVideoError);
+            
+            // Client object for metadata - MUST be set before play
+            var client:Object = {};
+            client.onMetaData = onVideoMetaData;
+            client.onCuePoint = function(info:Object):void {};
+            client.onPlayStatus = function(info:Object):void {
+                if (DEBUG) trace("[Main] onPlayStatus: " + info.code);
+            };
+            _netStream.client = client;
+            
+            // Create Video object FIRST with explicit size
+            _video = new Video(1280, 720);
+            _video.width = stage.stageWidth;
+            _video.height = stage.stageHeight;
+            _video.x = 0;
+            _video.y = 0;
+            _video.smoothing = true;
+            
+            // Attach stream to video
+            _video.attachNetStream(_netStream);
+            
+            // Create container and add video
+            _videoContainer = new Sprite();
+            _videoContainer.addChild(_video);
+            addChild(_videoContainer);
+            
+            // Make sure video is on top
+            setChildIndex(_videoContainer, numChildren - 1);
+            
+            if (DEBUG) {
+                trace("[Main] Video object created: " + _video.width + "x" + _video.height);
+                trace("[Main] Video container children: " + _videoContainer.numChildren);
+            }
+            
+            // Get video file path
+            var videoFile:File = File.applicationDirectory.resolvePath("assets/videoOpening.mp4");
+            if (DEBUG) {
+                trace("[Main] Video file URL: " + videoFile.url);
+                trace("[Main] Video file exists: " + videoFile.exists);
+            }
+            
+            if (!videoFile.exists) {
+                trace("[Main] ERROR: Video file not found!");
+                initializeMenu();
+                return;
+            }
+            
+            // Play video - use URL
+            _netStream.play(videoFile.url);
+            
+            if (DEBUG) {
+                trace("[Main] NetStream.play() called");
+            }
+            
+            // Record video start time
+            _videoStartTime = getTimer();
+            
+            // Create skip button after a short delay
+            createSkipButton();
+            
+            // Start checking for skip button visibility
+            addEventListener(Event.ENTER_FRAME, onVideoEnterFrame);
+        }
+        
+        /**
+         * Handle StageVideo render state changes (not used but kept for reference)
+         */
+        private function onStageVideoRenderState(event:StageVideoEvent):void {
+            if (DEBUG) {
+                trace("[Main] StageVideo render state: " + event.status);
+            }
+        }
+        
+        /**
+         * Create skip button in bottom right corner
+         */
+        private function createSkipButton():void {
+            _skipButton = new Sprite();
+            
+            // Button background
+            _skipButton.graphics.beginFill(0x000000, 0.7);
+            _skipButton.graphics.lineStyle(2, 0xFFFFFF);
+            _skipButton.graphics.drawRoundRect(0, 0, 120, 40, 10, 10);
+            _skipButton.graphics.endFill();
+            
+            // Button text
+            var skipText:TextField = new TextField();
+            var format:TextFormat = new TextFormat();
+            format.font = "Arial";
+            format.size = 18;
+            format.color = 0xFFFFFF;
+            format.bold = true;
+            format.align = "center";
+            
+            skipText.defaultTextFormat = format;
+            skipText.text = "Skip ▶▶";
+            skipText.width = 120;
+            skipText.height = 30;
+            skipText.y = 8;
+            skipText.selectable = false;
+            skipText.mouseEnabled = false;
+            _skipButton.addChild(skipText);
+            
+            // Position in bottom right corner with padding
+            _skipButton.x = stage.stageWidth - 140;
+            _skipButton.y = stage.stageHeight - 60;
+            
+            // Initially hidden
+            _skipButton.visible = false;
+            _skipButton.alpha = 0;
+            _skipButton.buttonMode = true;
+            _skipButton.useHandCursor = true;
+            
+            // Add click handler
+            _skipButton.addEventListener(MouseEvent.CLICK, onSkipButtonClick);
+            _skipButton.addEventListener(MouseEvent.ROLL_OVER, onSkipButtonOver);
+            _skipButton.addEventListener(MouseEvent.ROLL_OUT, onSkipButtonOut);
+            
+            _videoContainer.addChild(_skipButton);
+        }
+        
+        /**
+         * Check if skip button should be visible (after 10 seconds)
+         */
+        private function onVideoEnterFrame(event:Event):void {
+            if (_videoCompleted) return;
+            
+            var elapsedTime:Number = (getTimer() - _videoStartTime) / 1000; // Convert to seconds
+            
+            // Show skip button after 10 seconds
+            if (!_skipButtonVisible && elapsedTime >= 10) {
+                _skipButtonVisible = true;
+                _skipButton.visible = true;
+                
+                // Fade in animation
+                addEventListener(Event.ENTER_FRAME, fadeInSkipButton);
+                
+                if (DEBUG) {
+                    trace("[Main] Skip button now visible (elapsed: " + elapsedTime.toFixed(1) + "s)");
+                }
+            }
+        }
+        
+        /**
+         * Fade in skip button
+         */
+        private function fadeInSkipButton(event:Event):void {
+            if (_skipButton.alpha < 1) {
+                _skipButton.alpha += 0.1;
+            } else {
+                _skipButton.alpha = 1;
+                removeEventListener(Event.ENTER_FRAME, fadeInSkipButton);
+            }
+        }
+        
+        /**
+         * Skip button hover effect
+         */
+        private function onSkipButtonOver(event:MouseEvent):void {
+            _skipButton.scaleX = 1.05;
+            _skipButton.scaleY = 1.05;
+        }
+        
+        private function onSkipButtonOut(event:MouseEvent):void {
+            _skipButton.scaleX = 1;
+            _skipButton.scaleY = 1;
+        }
+        
+        /**
+         * Handle skip button click
+         */
+        private function onSkipButtonClick(event:MouseEvent):void {
+            event.stopPropagation(); // Prevent event bubbling
+            if (DEBUG) {
+                trace("[Main] Skip button clicked");
+            }
+            onVideoComplete();
+        }
+        
+        /**
+         * Handle video metadata
+         */
+        private function onVideoMetaData(info:Object):void {
+            if (DEBUG) {
+                trace("[Main] Video metadata - duration: " + info.duration + "s, size: " + info.width + "x" + info.height);
+            }
+            
+            // Store duration
+            _videoDuration = info.duration ? info.duration : 0;
+            
+            // Store original video dimensions
+            _videoOriginalWidth = info.width ? info.width : 1280;
+            _videoOriginalHeight = info.height ? info.height : 720;
+            
+            // Apply responsive sizing
+            resizeVideo();
+        }
+        
+        /**
+         * Resize video to fit current stage size while maintaining aspect ratio
+         */
+        private function resizeVideo():void {
+            if (_videoCompleted) return;
+            if (_videoOriginalWidth == 0 || _videoOriginalHeight == 0) return;
+            
+            var stageWidth:Number = stage.stageWidth;
+            var stageHeight:Number = stage.stageHeight;
+            
+            // Scale video to cover screen while maintaining aspect ratio
+            var scaleX:Number = stageWidth / _videoOriginalWidth;
+            var scaleY:Number = stageHeight / _videoOriginalHeight;
+            var scale:Number = Math.max(scaleX, scaleY); // Cover the screen
+            
+            var scaledWidth:Number = _videoOriginalWidth * scale;
+            var scaledHeight:Number = _videoOriginalHeight * scale;
+            var xOffset:Number = (stageWidth - scaledWidth) / 2;
+            var yOffset:Number = (stageHeight - scaledHeight) / 2;
+            
+            if (_useStageVideo && _stageVideo) {
+                // Update StageVideo viewport
+                _stageVideo.viewPort = new Rectangle(xOffset, yOffset, scaledWidth, scaledHeight);
+            } else if (_video) {
+                // Update regular Video object
+                _video.width = scaledWidth;
+                _video.height = scaledHeight;
+                _video.x = xOffset;
+                _video.y = yOffset;
+            }
+            
+            // Update skip button position
+            if (_skipButton) {
+                _skipButton.x = stageWidth - 140;
+                _skipButton.y = stageHeight - 60;
+            }
+            
+            if (DEBUG) {
+                trace("[Main] Video resized to: " + scaledWidth.toFixed(0) + "x" + scaledHeight.toFixed(0) + " at (" + xOffset.toFixed(0) + ", " + yOffset.toFixed(0) + ")");
+            }
+        }
+        
+        /**
+         * Handle video status events
+         */
+        private function onVideoStatus(event:NetStatusEvent):void {
+            if (DEBUG) {
+                trace("[Main] Video status: " + event.info.code);
+            }
+            
+            switch (event.info.code) {
+                case "NetStream.Play.Stop":
+                    // Video finished playing
+                    onVideoComplete();
+                    break;
+                case "NetStream.Play.StreamNotFound":
+                    // Video file not found - skip to menu
+                    trace("[Main] WARNING: Video file not found, skipping to menu");
+                    onVideoComplete();
+                    break;
+                case "NetStream.Play.NoSupportedTrackFound":
+                    // Video codec not supported - skip to menu
+                    trace("[Main] WARNING: Video codec not supported (need H.264/AAC), skipping to menu");
+                    trace("[Main] Please convert video using: ffmpeg -i input.mp4 -c:v libx264 -c:a aac output.mp4");
+                    onVideoComplete();
+                    break;
+                case "NetStream.Play.Failed":
+                    trace("[Main] WARNING: Video playback failed, skipping to menu");
+                    onVideoComplete();
+                    break;
+            }
+        }
+        
+        /**
+         * Handle video errors
+         */
+        private function onVideoError(event:AsyncErrorEvent):void {
+            if (DEBUG) {
+                trace("[Main] Video error: " + event.text);
+            }
+            // Skip to menu on error
+            onVideoComplete();
+        }
+        
+        /**
+         * Clean up video and show menu
+         */
+        private function onVideoComplete():void {
+            if (_videoCompleted) return; // Prevent multiple calls
+            _videoCompleted = true;
+            
+            if (DEBUG) {
+                trace("[Main] Video complete - showing menu");
+            }
+            
+            // Remove enter frame listeners
+            removeEventListener(Event.ENTER_FRAME, onVideoEnterFrame);
+            removeEventListener(Event.ENTER_FRAME, fadeInSkipButton);
+            
+            // Stop and clean up video
+            if (_netStream) {
+                _netStream.removeEventListener(NetStatusEvent.NET_STATUS, onVideoStatus);
+                _netStream.removeEventListener(AsyncErrorEvent.ASYNC_ERROR, onVideoError);
+                _netStream.close();
+            }
+            
+            // Clean up StageVideo
+            if (_stageVideo) {
+                _stageVideo.removeEventListener(StageVideoEvent.RENDER_STATE, onStageVideoRenderState);
+                _stageVideo.attachNetStream(null);
+                _stageVideo = null;
+            }
+            
+            if (_videoContainer) {
+                // Clean up skip button
+                if (_skipButton) {
+                    _skipButton.removeEventListener(MouseEvent.CLICK, onSkipButtonClick);
+                    _skipButton.removeEventListener(MouseEvent.ROLL_OVER, onSkipButtonOver);
+                    _skipButton.removeEventListener(MouseEvent.ROLL_OUT, onSkipButtonOut);
+                    _videoContainer.removeChild(_skipButton);
+                    _skipButton = null;
+                }
+                
+                if (_video) {
+                    _video.attachNetStream(null);
+                    _videoContainer.removeChild(_video);
+                }
+                removeChild(_videoContainer);
+            }
+            
+            // Clean up references
+            _video = null;
+            _netStream = null;
+            _netConnection = null;
+            _videoContainer = null;
+            _skipButtonVisible = false;
+            _useStageVideo = false;
+            
+            // Initialize menu
+            initializeMenu();
+        }
 
         private function onStageResize(event:Event):void {
             if (DEBUG) {
                 trace("Stage resized to: " + stage.stageWidth + "x" + stage.stageHeight);
+            }
+            
+            // Resize video if playing
+            if (!_videoCompleted && _video) {
+                resizeVideo();
             }
             
             // Resize menu components
