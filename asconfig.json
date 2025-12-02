@@ -7,5 +7,13 @@
         "output": "bin/CognitiveCastle.swf"
     },
     "application": "CognitiveCastle-app.xml",
-    "mainClass": "Main" 
+    "mainClass": "Main",
+    "airOptions": {
+        "files": [
+            {
+                "file": "assets",
+                "path": "assets"
+            }
+        ]
+    }
 }

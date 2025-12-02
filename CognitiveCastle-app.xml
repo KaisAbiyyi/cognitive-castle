@@ -16,7 +16,6 @@
         <fullScreen>false</fullScreen>
         <autoOrients>true</autoOrients>
         <aspectRatio>landscape</aspectRatio>
-        <renderMode>direct</renderMode>
     </initialWindow>
 
     <android>
