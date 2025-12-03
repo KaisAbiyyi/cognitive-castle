@@ -99,6 +99,9 @@ package ui {
         private var _stageWidth:Number;
         private var _stageHeight:Number;
         
+        // Last trial result (for animation after close)
+        private var _lastTrialResult:Boolean = false; // true = success, false = fail
+        
         /**
          * Constructor
          */
@@ -1047,6 +1050,9 @@ package ui {
                 formatCorrect.size = 72;
                 _stimulusDisplay.setTextFormat(formatCorrect);
                 
+                // Store result for animation after close
+                _lastTrialResult = true;
+                
                 dispatchEvent(new Event(TRIAL_SUCCESS));
             } else {
                 // Wrong answer - new error logic:
@@ -1109,6 +1115,9 @@ package ui {
                 formatWrong.color = 0xE53E3E;
                 formatWrong.size = 72;
                 _stimulusDisplay.setTextFormat(formatWrong);
+                
+                // Store result for animation after close
+                _lastTrialResult = false;
                 
                 dispatchEvent(new Event(TRIAL_FAIL));
             }
@@ -1223,6 +1232,14 @@ package ui {
          */
         public function getWrongCount():int {
             return _wrongCount;
+        }
+        
+        /**
+         * Get last trial result (true = success, false = fail)
+         * Used for triggering castle animation after popup closes
+         */
+        public function getLastTrialResult():Boolean {
+            return _lastTrialResult;
         }
         
         /**

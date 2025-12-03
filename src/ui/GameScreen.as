@@ -361,6 +361,27 @@ package ui {
         }
         
         /**
+         * Remove a side tower (called when wrong 3x streak)
+         * Returns true if a tower was removed
+         */
+        public function removeSideTower():Boolean {
+            if (_towerCastle) {
+                return _towerCastle.removeSideTower();
+            }
+            return false;
+        }
+        
+        /**
+         * Check if there are side towers to remove
+         */
+        public function hasSideTowers():Boolean {
+            if (_towerCastle) {
+                return _towerCastle.hasSideTowers();
+            }
+            return false;
+        }
+        
+        /**
          * Reset castle
          */
         public function resetCastle():void {
