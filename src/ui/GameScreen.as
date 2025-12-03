@@ -7,7 +7,7 @@ package ui {
     import flash.text.TextFormatAlign;
     import flash.events.Event;
     import flash.events.MouseEvent;
-    import castle.BlockCastle;
+    import castle.TowerCastle;
     
     /**
      * GameScreen - Main game screen with FULL WINDOW castle view and upgrade button.
@@ -15,7 +15,7 @@ package ui {
      * 
      * Layout:
      * - Window frame (black border) - scales with window
-     * - Castle FULL WINDOW (using BlockCastle) - fills available space
+     * - Castle FULL WINDOW (using TowerCastle) - fills available space
      * - Upgrade button (bottom left) - responsive size and position
      * - Alert upgrade popup - centered
      */
@@ -41,7 +41,7 @@ package ui {
         // Visual components
         private var _windowFrame:Shape;
         private var _background:Shape;
-        private var _blockCastle:BlockCastle;
+        private var _towerCastle:TowerCastle;
         private var _upgradeButton:Sprite;
         private var _alertPopup:Sprite;
         private var _alertText:TextField;
@@ -140,26 +140,26 @@ package ui {
             var castleWidth:Number = _stageWidth - _frameMargin * 2;
             var castleHeight:Number = _stageHeight - _frameMargin * 2 - _buttonSize - 20;
             
-            _blockCastle = new BlockCastle(castleWidth, castleHeight);
-            _blockCastle.x = _frameMargin;
-            _blockCastle.y = _frameMargin;
+            _towerCastle = new TowerCastle(castleWidth, castleHeight);
+            _towerCastle.x = _frameMargin;
+            _towerCastle.y = _frameMargin;
             
-            addChild(_blockCastle);
+            addChild(_towerCastle);
             
             if (DEBUG) {
-                trace("[GameScreen] BlockCastle created: " + castleWidth + "x" + castleHeight);
+                trace("[GameScreen] TowerCastle created: " + castleWidth + "x" + castleHeight);
             }
         }
         
         private function updateBlockCastle():void {
-            if (!_blockCastle) return;
+            if (!_towerCastle) return;
             
             var castleWidth:Number = _stageWidth - _frameMargin * 2;
             var castleHeight:Number = _stageHeight - _frameMargin * 2 - _buttonSize - 20;
             
-            _blockCastle.resize(castleWidth, castleHeight);
-            _blockCastle.x = _frameMargin;
-            _blockCastle.y = _frameMargin;
+            _towerCastle.resize(castleWidth, castleHeight);
+            _towerCastle.x = _frameMargin;
+            _towerCastle.y = _frameMargin;
         }
         
         /**
@@ -322,11 +322,11 @@ package ui {
          * Get castle center position for effects
          */
         public function getCastleCenter():Object {
-            if (_blockCastle) {
-                var center:* = _blockCastle.getCenter();
+            if (_towerCastle) {
+                var center:* = _towerCastle.getCenter();
                 return {
-                    x: _blockCastle.x + center.x,
-                    y: _blockCastle.y + center.y
+                    x: _towerCastle.x + center.x,
+                    y: _towerCastle.y + center.y
                 };
             }
             return {
@@ -336,58 +336,70 @@ package ui {
         }
         
         /**
-         * Get block castle reference for direct manipulation
+         * Get tower castle reference
          */
-        public function getBlockCastle():BlockCastle {
-            return _blockCastle;
+        public function getTowerCastle():TowerCastle {
+            return _towerCastle;
         }
         
         /**
-         * Enlarge a random existing block
+         * Process upgrade based on streak (1-11 system)
          */
+        public function processUpgrade(streak:int):void {
+            if (_towerCastle) {
+                _towerCastle.processUpgrade(streak);
+            }
+        }
+        
+        /**
+         * Process wrong answer
+         */
+        public function processWrong():void {
+            if (_towerCastle) {
+                _towerCastle.processWrong();
+            }
+        }
+        
+        /**
+         * Reset castle
+         */
+        public function resetCastle():void {
+            if (_towerCastle) {
+                _towerCastle.reset();
+            }
+        }
+        
+        /**
+         * Get current streak
+         */
+        public function getCurrentStreak():int {
+            if (_towerCastle) {
+                return _towerCastle.getCurrentStreak();
+            }
+            return 0;
+        }
+        
+        // Legacy methods for compatibility
         public function enlargeRandomBlock():Boolean {
-            if (_blockCastle) {
-                return _blockCastle.enlargeRandomBlock();
-            }
             return false;
         }
         
-        /**
-         * Shrink a random existing block
-         */
         public function shrinkRandomBlock():Boolean {
-            if (_blockCastle) {
-                return _blockCastle.shrinkRandomBlock();
-            }
-            return false;
+            processWrong();
+            return true;
         }
         
-        /**
-         * Add a new block
-         */
         public function addNewBlock():Object {
-            if (_blockCastle) {
-                return _blockCastle.addNewBlock();
-            }
             return null;
         }
         
-        /**
-         * Remove a random block
-         */
         public function removeRandomBlock():Boolean {
-            if (_blockCastle) {
-                return _blockCastle.removeRandomBlock();
-            }
             return false;
         }
         
-        /**
-         * Get block count
-         */
         public function getBlockCount():int {
-            if (_blockCastle) {
-                return _blockCastle.blockCount;
+            if (_towerCastle) {
+                return _towerCastle.getTowerCount();
             }
             return 0;
         }

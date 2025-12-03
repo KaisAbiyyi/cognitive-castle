@@ -4,11 +4,15 @@ package game {
     import flash.display.SimpleButton;
     import flash.text.TextField;
     import flash.text.TextFormat;
+    import flash.text.TextFormatAlign;
     import flash.events.MouseEvent;
     import flash.utils.Timer;
     import flash.events.TimerEvent;
     import ui.HUD;
-    import generation.SequenceGenerator;
+    import generation.QuestionGenerator;
+    import generation.QuestionManager;
+    import generation.NumberQuestion;
+    import generation.QuestionEvent;
     import input.InputManager;
     import domain.StimulusItem;
     import domain.TrialResult;
@@ -24,10 +28,15 @@ package game {
      * GameController - Manages the game loop finite state machine and orchestrates all game components.
      * Handles phase transitions: IDLE -> STIMULUS -> INPUT -> RESULT -> NEXT
      *
+     * NEW QUESTION SYSTEM:
+     * - Uses NumberQuestion with 3 combinations (4, 6, 8 digits)
+     * - 3 difficulty levels: EASY (recall), MEDIUM (reverse), HARD (swap odd/even)
+     * - Numbers displayed sorted descending, player must recall original order
+     *
      * SOLID Principles:
      * - Single Responsibility: Only orchestrates game flow and state management
      * - Open/Closed: Can be extended with new game states without changing existing code
-     * - Dependency Inversion: Depends on abstractions (HUD, SequenceGenerator, InputManager)
+     * - Dependency Inversion: Depends on abstractions (HUD, QuestionGenerator, InputManager)
      */
     public class GameController {
 
@@ -49,7 +58,8 @@ package game {
 
         // Game components
         private var _hud:HUD;
-        private var _sequenceGenerator:SequenceGenerator;
+        private var _questionGenerator:QuestionGenerator;
+        private var _questionManager:QuestionManager;
         private var _inputManager:InputManager;
         // private var _stimulusView:StimulusView; // Stub - implemented in Area 2
         // private var _validator:Validator; // Stub - implemented in Area 4
@@ -65,8 +75,16 @@ package game {
         private var _currentStreak:int = 0;
         private var _trialStartTime:Number = 0;
         private var _inputStartTime:Number = 0;
+        
+        // Level progression tracking
+        private var _correctAnswersAtCurrentLevel:int = 0;
+        private static const CORRECT_ANSWERS_TO_LEVEL_UP:int = 3;
 
-        // Game data
+        // NEW Question System Data
+        private var _currentQuestion:NumberQuestion;
+        private var _userAnswerArray:Array;
+        
+        // Legacy (keep for compatibility)
         private var _currentSequence:Vector.<StimulusItem>;
         private var _userInput:Vector.<int>;
         private var _isCorrect:Boolean;
@@ -98,7 +116,10 @@ package game {
          * Constructor (private for singleton)
          */
         public function GameController() {
-            _sequenceGenerator = new SequenceGenerator();
+            // Initialize NEW question system
+            _questionGenerator = QuestionGenerator.getInstance();
+            _questionManager = QuestionManager.getInstance();
+            
             _inputManager = InputManager.getInstance();
             _autoAdvanceTimer = new Timer(RESULT_DISPLAY_TIME, 1);
             _autoAdvanceTimer.addEventListener(TimerEvent.TIMER_COMPLETE, onAutoAdvance);
@@ -106,6 +127,9 @@ package game {
             // Initialize castle system
             _castleArchitect = new CastleArchitect();
             _metricsManager = MetricsManager.getInstance();
+            
+            // Initialize user answer array
+            _userAnswerArray = [];
         }
 
         /**
@@ -337,16 +361,47 @@ package game {
          */
         private function onEnterIdle():void {
             _hud.setStateText("Ready");
-            _hud.setInstructionText("Press any key or tap to start the sequence challenge.");
+            _hud.setInstructionText("Tekan tombol apapun atau tap untuk memulai tantangan!");
             // Don't show next trial button in IDLE state - it's shown via HUD START button
         }
 
         /**
-         * Handle STIMULUS state entry
+         * Map HUD level to question combination and level
+         * Level 1-3: 4 digits (Easy, Medium, Hard)
+         * Level 4-6: 6 digits (Easy, Medium, Hard)
+         * Level 7-9: 8 digits (Easy, Medium, Hard)
+         */
+        private function getQuestionSettingsFromLevel(hudLevel:int):Object {
+            var settings:Object = {
+                combination: NumberQuestion.COMBO_4,
+                level: NumberQuestion.LEVEL_EASY
+            };
+            
+            if (hudLevel <= 3) {
+                settings.combination = NumberQuestion.COMBO_4;
+            } else if (hudLevel <= 6) {
+                settings.combination = NumberQuestion.COMBO_6;
+            } else {
+                settings.combination = NumberQuestion.COMBO_8;
+            }
+            
+            var levelMod:int = (hudLevel - 1) % 3;
+            if (levelMod == 0) {
+                settings.level = NumberQuestion.LEVEL_EASY;
+            } else if (levelMod == 1) {
+                settings.level = NumberQuestion.LEVEL_MEDIUM;
+            } else {
+                settings.level = NumberQuestion.LEVEL_HARD;
+            }
+            
+            return settings;
+        }
+
+        /**
+         * Handle STIMULUS state entry - NEW QUESTION SYSTEM
          */
         private function onEnterStimulus():void {
-            _hud.setStateText("Observe");
-            _hud.setInstructionText("Watch the sequence carefully...");
+            _hud.setStateText("Ingat!");
             if (_nextTrialButton) {
                 _nextTrialButton.visible = false;
             }
@@ -354,149 +409,183 @@ package game {
             // Record trial start time
             _trialStartTime = new Date().getTime();
 
-            // Generate sequence
-            _currentSequence = _sequenceGenerator.generateSequence(_hud.getLevel());
-            _hud.setSpan(_currentSequence.length);
+            // Get question settings based on HUD level
+            var settings:Object = getQuestionSettingsFromLevel(_hud.getLevel());
+            
+            // Generate NEW question using QuestionGenerator
+            _currentQuestion = _questionGenerator.generate(settings.combination, settings.level);
+            _hud.setSpan(_currentQuestion.combination);
 
             if (DEBUG) {
-                trace("========== STIMULUS PHASE ==========");
-                trace("Generated sequence: " + _currentSequence.length + " items");
-                var seqIds:Array = [];
-                for each (var debugItem:StimulusItem in _currentSequence) {
-                    seqIds.push(debugItem.id);
-                }
-                trace("Sequence IDs: " + seqIds.join(", "));
-                trace("====================================");
+                trace("========== STIMULUS PHASE (NEW SYSTEM) ==========");
+                trace("HUD Level: " + _hud.getLevel() + " -> Combo: " + settings.combination + ", Difficulty: " + settings.level);
+                trace("Combination: " + _currentQuestion.combination + " angka");
+                trace("Level: " + _currentQuestion.getLevelName());
+                trace("Original sequence: [" + _currentQuestion.originalSequence.join(", ") + "]");
+                trace("Displayed (sorted): [" + _currentQuestion.displayedSequence.join(", ") + "]");
+                trace("Correct answer: [" + _currentQuestion.correctAnswer.join(", ") + "]");
+                trace("Instruction: " + _currentQuestion.instruction);
+                trace("================================================");
             }
 
-            // Show first stimulus immediately
-            _currentStimulusIndex = 0;
-            showCurrentStimulus();
+            // Show instruction based on level
+            var levelProgress:String = "Level " + _hud.getLevel() + " | " + _currentQuestion.combination + " angka | " + _currentQuestion.getLevelName();
+            _hud.setInstructionText(levelProgress + "\nINGAT URUTAN angka-angka ini!");
+
+            // Show the ORIGINAL sequence (what user needs to remember)
+            _stimulusDisplay.text = _currentQuestion.originalSequence.join("  ");
+            _stimulusDisplay.visible = true;
             
-            // Set timer for next stimuli (1.5 seconds per item)
-            _stimulusTimer = new Timer(1500);
-            _stimulusTimer.addEventListener(TimerEvent.TIMER, onStimulusTick);
+            // Format stimulus display
+            formatStimulusDisplay();
+
+            // Show numbers for time based on combination
+            var displayTime:int = 2000 + (_currentQuestion.combination * 500); // 4s for 4 digits, 5s for 6, 6s for 8
+            
+            _stimulusTimer = new Timer(displayTime, 1);
+            _stimulusTimer.addEventListener(TimerEvent.TIMER_COMPLETE, onStimulusComplete);
             _stimulusTimer.start();
             
             if (DEBUG) {
-                trace("Stimulus timer started - 1.5s interval");
+                trace("Display time: " + displayTime + "ms");
             }
         }
-
+        
         /**
-         * Show current stimulus item
+         * Format the stimulus display for better visibility
          */
-        private function showCurrentStimulus():void {
-            if (_currentStimulusIndex < _currentSequence.length) {
-                var item:StimulusItem = _currentSequence[_currentStimulusIndex];
-                _stimulusDisplay.text = String(item.id + 1); // Show 1-indexed
-                _stimulusDisplay.visible = true;
-                
-                if (DEBUG) {
-                    trace("Showing stimulus " + (_currentStimulusIndex + 1) + "/" + _currentSequence.length + ": ID=" + item.id + " (display: " + (item.id + 1) + ")");
-                }
-            }
+        private function formatStimulusDisplay():void {
+            var format:TextFormat = new TextFormat();
+            format.size = 36;
+            format.bold = true;
+            format.color = 0xFFFFFF;
+            format.align = TextFormatAlign.CENTER;
+            format.letterSpacing = 8;
+            _stimulusDisplay.setTextFormat(format);
         }
-
+        
         /**
-         * Handle stimulus tick - advance to next stimulus or complete
+         * Handle stimulus display complete - move to input phase
          */
-        private function onStimulusTick(event:TimerEvent):void {
-            _currentStimulusIndex++;
+        private function onStimulusComplete(event:TimerEvent):void {
+            if (_stimulusTimer) {
+                _stimulusTimer.stop();
+                _stimulusTimer.removeEventListener(TimerEvent.TIMER_COMPLETE, onStimulusComplete);
+                _stimulusTimer = null;
+            }
+            _stimulusDisplay.visible = false;
             
-            if (_currentStimulusIndex < _currentSequence.length) {
-                // Show next stimulus
-                showCurrentStimulus();
-            } else {
-                // All stimuli shown, move to input phase
-                if (_stimulusTimer) {
-                    _stimulusTimer.stop();
-                    _stimulusTimer.removeEventListener(TimerEvent.TIMER, onStimulusTick);
-                    _stimulusTimer = null;
-                }
-                _stimulusDisplay.visible = false;
-                
-                if (DEBUG) {
-                    trace("All " + _currentSequence.length + " stimuli shown, moving to INPUT");
-                }
-                
-                enterState(STATE_INPUT);
+            if (DEBUG) {
+                trace("Stimulus display complete, moving to INPUT phase");
             }
+            
+            enterState(STATE_INPUT);
+        }
+
+        // Legacy methods kept for compatibility (not used in new system)
+        private function showCurrentStimulus():void {
+            // Legacy - not used in new question system
+        }
+
+        private function onStimulusTick(event:TimerEvent):void {
+            // Legacy - not used in new question system
         }
 
         /**
-         * Handle INPUT state entry
+         * Handle INPUT state entry - NEW QUESTION SYSTEM
          */
         private function onEnterInput():void {
-            _hud.setStateText("Answer");
-            _hud.setInstructionText("Reproduce the sequence by clicking the buttons in order.");
+            _hud.setStateText("Jawab! [" + _currentQuestion.getLevelName() + "]");
+            
+            // Show instruction based on level with more detail
+            var levelInfo:String = "Level " + _hud.getLevel() + " (" + _currentQuestion.combination + " angka - " + _currentQuestion.getLevelName() + ")\n";
+            _hud.setInstructionText(levelInfo + _currentQuestion.instruction);
             
             // Record input start time
             _inputStartTime = new Date().getTime();
 
+            // Reset user answer array
+            _userAnswerArray = [];
+
             // Show user input display
-            _userInputDisplay.text = "Your input: ";
+            _userInputDisplay.text = "Jawaban: ";
             _userInputDisplay.visible = true;
 
             if (DEBUG) {
-                trace("onEnterInput - Sequence length: " + _currentSequence.length);
-                trace("Showing " + _currentSequence.length + " input buttons");
+                trace("onEnterInput - Question combination: " + _currentQuestion.combination);
+                trace("Showing 10 input buttons (numbers 0-9)");
             }
 
-            // Start input collection with callback for each button click
-            // Only show buttons matching the sequence length
-            _inputManager.startInputPhase(onInputReceived, onInputTimeout, 10000, onButtonClicked, _currentSequence.length);
+            // Start input collection with 10 buttons (numbers 0-9)
+            // Timeout based on question timeLimit
+            var timeout:int = _currentQuestion.timeLimit * 1000;
+            _inputManager.startInputPhase(onInputReceived, onInputTimeout, timeout, onButtonClicked, 10);
         }
 
         /**
-         * Handle each button click (update display)
+         * Handle each button click (update display) - NEW SYSTEM
+         * Numbers are 0-9, no conversion needed
          */
         private function onButtonClicked(buffer:Vector.<int>):void {
-            // Convert buffer to 1-indexed display
+            _userAnswerArray = [];
             var displayArray:Array = [];
             for each (var id:int in buffer) {
-                displayArray.push(String(id + 1));
+                _userAnswerArray.push(id); // Numbers are already 0-9
+                displayArray.push(String(id));
             }
-            _userInputDisplay.text = "Your input: " + displayArray.join(", ");
+            _userInputDisplay.text = "Jawaban: " + displayArray.join(", ");
             
             if (DEBUG) {
-                trace("Current input buffer: " + displayArray.join(", "));
+                trace("Current answer buffer: " + displayArray.join(", "));
+            }
+            
+            // Auto-submit when enough numbers entered
+            if (_userAnswerArray.length >= _currentQuestion.combination) {
+                if (DEBUG) {
+                    trace("Auto-submitting - answer complete");
+                }
+                // Small delay before auto-submit
+                var submitTimer:Timer = new Timer(300, 1);
+                submitTimer.addEventListener(TimerEvent.TIMER_COMPLETE, function(e:TimerEvent):void {
+                    submitTimer.removeEventListener(TimerEvent.TIMER_COMPLETE, arguments.callee);
+                    _inputManager.forceSubmit();
+                });
+                submitTimer.start();
             }
         }
 
         /**
-         * Handle input received
-         * @param input User input buffer
+         * Handle input received - NEW SYSTEM
+         * @param input User input buffer (numbers 0-9)
          */
         private function onInputReceived(input:Vector.<int>):void {
-            _userInput = new Vector.<int>();
+            // Copy to array - numbers are already 0-9
+            _userAnswerArray = [];
             for each (var id:int in input) {
-                _userInput.push(id);
+                _userAnswerArray.push(id); // Numbers are already 0-9
             }
             
             // Hide user input display
             _userInputDisplay.visible = false;
             
             if (DEBUG) {
-                trace("========== VALIDATION ==========");
-                trace("User input received: " + _userInput.join(","));
-                
-                // Show expected sequence
-                var expectedIds:Array = [];
-                for each (var item:StimulusItem in _currentSequence) {
-                    expectedIds.push(item.id);
-                }
-                trace("Expected sequence: " + expectedIds.join(","));
-                trace("Length match: " + (_currentSequence.length == _userInput.length));
+                trace("========== VALIDATION (NEW SYSTEM) ==========");
+                trace("User answer: [" + _userAnswerArray.join(", ") + "]");
+                trace("Correct answer: [" + _currentQuestion.correctAnswer.join(", ") + "]");
             }
 
-            // TODO: Validate input using Validator
-            // For now, simple check
-            _isCorrect = validateSimple(_currentSequence, _userInput);
+            // Validate using new question system
+            var validationResult:Object = _currentQuestion.validateAnswer(_userAnswerArray);
+            _isCorrect = validationResult.isCorrect;
             
             if (DEBUG) {
                 trace("Validation result: " + (_isCorrect ? "CORRECT" : "INCORRECT"));
-                trace("================================");
+                trace("Correct count: " + validationResult.correctCount + "/" + validationResult.totalCount);
+                trace("Accuracy: " + Math.round(validationResult.accuracy * 100) + "%");
+                if (validationResult.errors.length > 0) {
+                    trace("Errors: " + validationResult.errors.join("; "));
+                }
+                trace("=============================================");
             }
 
             enterState(STATE_RESULT);
@@ -506,7 +595,7 @@ package game {
          * Handle input timeout
          */
         private function onInputTimeout():void {
-            _userInput = new Vector.<int>();
+            _userAnswerArray = [];
             _isCorrect = false;
             if (DEBUG) {
                 trace("Input timeout - incorrect");
@@ -515,35 +604,7 @@ package game {
         }
 
         /**
-         * Simple validation (placeholder)
-         * @param sequence Correct sequence
-         * @param input User input
-         * @return True if correct
-         */
-        private function validateSimple(sequence:Vector.<StimulusItem>, userInput:Vector.<int>):Boolean {
-            if (sequence.length != userInput.length) {
-                if (DEBUG) {
-                    trace("Length mismatch: " + sequence.length + " vs " + userInput.length);
-                }
-                return false;
-            }
-
-            for (var i:int = 0; i < sequence.length; i++) {
-                if (DEBUG) {
-                    trace("Comparing position " + i + ": expected=" + sequence[i].id + " got=" + userInput[i]);
-                }
-                if (sequence[i].id != userInput[i]) {
-                    if (DEBUG) {
-                        trace("Mismatch at position " + i);
-                    }
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        /**
-         * Handle RESULT state entry
+         * Handle RESULT state entry - NEW SYSTEM
          */
         private function onEnterResult():void {
             _trialCount++;
@@ -560,14 +621,14 @@ package game {
                 _currentStreak = 0;
             }
 
-            // Build comparison text
+            // Build comparison text using NEW question system
             var expectedIds:Array = [];
-            for each (var item:StimulusItem in _currentSequence) {
-                expectedIds.push(String(item.id + 1)); // 1-indexed
+            for each (var num:* in _currentQuestion.correctAnswer) {
+                expectedIds.push(String(num));
             }
             var userIds:Array = [];
-            for each (var id:int in _userInput) {
-                userIds.push(String(id + 1)); // 1-indexed
+            for each (var userNum:* in _userAnswerArray) {
+                userIds.push(String(userNum));
             }
             
             // Create TrialResult for castle system
@@ -575,17 +636,18 @@ package game {
             trialResult.isCorrect = _isCorrect;
             trialResult.reactionTime = reactionTime;
             trialResult.totalTime = totalTime;
-            trialResult.sequenceLength = _currentSequence.length;
+            trialResult.sequenceLength = _currentQuestion.combination;
             trialResult.difficulty = _hud.getLevel();
             trialResult.expected = expectedIds;
             trialResult.actual = userIds;
             trialResult.streakAfter = _currentStreak;
-            trialResult.totalItems = _currentSequence.length;
-            trialResult.correctItems = _isCorrect ? _currentSequence.length : countCorrectItems();
+            trialResult.totalItems = _currentQuestion.combination;
+            trialResult.correctItems = _isCorrect ? _currentQuestion.combination : countCorrectItemsNew();
             trialResult.accuracy = trialResult.totalItems > 0 ? trialResult.correctItems / trialResult.totalItems : 0;
             
-            // Calculate score using CastleConfig
-            trialResult.scoreEarned = CastleConfig.calculateTrialPoints(_isCorrect, _currentStreak, _hud.getLevel());
+            // Calculate score using difficulty multiplier from question
+            var baseScore:int = CastleConfig.calculateTrialPoints(_isCorrect, _currentStreak, _hud.getLevel());
+            trialResult.scoreEarned = Math.floor(baseScore * _currentQuestion.getDifficultyMultiplier());
             
             // Apply to castle system
             var buildEvents:Vector.<BuildEvent> = _castleArchitect.applyTrialResult(trialResult);
@@ -599,21 +661,47 @@ package game {
             // Update castle view and panel
             updateCastleDisplay();
             
-            var comparisonText:String = "\nExpected: " + expectedIds.join(", ") + 
-                                       "\nYou entered: " + userIds.join(", ");
+            // Build comparison text for display - show original sequence that was displayed
+            var comparisonText:String = "\nDitampilkan: [" + _currentQuestion.originalSequence.join(", ") + "]" +
+                                       "\nJawaban benar: [" + expectedIds.join(", ") + "]" + 
+                                       "\nJawaban Anda: [" + userIds.join(", ") + "]";
 
             if (_isCorrect) {
                 _hud.setScore(_hud.getScore() + 1);
-                _hud.setStateText("Correct! +" + trialResult.scoreEarned + " pts");
-                _hud.setInstructionText("Well done! Sequence completed successfully." + comparisonText);
+                _correctAnswersAtCurrentLevel++;
+                
+                // Check for level up
+                if (_correctAnswersAtCurrentLevel >= CORRECT_ANSWERS_TO_LEVEL_UP) {
+                    var currentLevel:int = _hud.getLevel();
+                    if (currentLevel < 9) { // Max level is 9 (8 digits HARD)
+                        _hud.setLevel(currentLevel + 1);
+                        _correctAnswersAtCurrentLevel = 0;
+                        _hud.setStateText("LEVEL UP! +" + trialResult.scoreEarned + " pts");
+                        _hud.setInstructionText("Luar biasa! Naik ke Level " + (currentLevel + 1) + "!" + comparisonText);
+                        if (DEBUG) {
+                            trace("=== LEVEL UP! Now at level " + (currentLevel + 1) + " ===");
+                        }
+                    } else {
+                        _hud.setStateText("Benar! +" + trialResult.scoreEarned + " pts");
+                        _hud.setInstructionText("SEMPURNA! Level maksimum tercapai!" + comparisonText);
+                    }
+                } else {
+                    var remaining:int = CORRECT_ANSWERS_TO_LEVEL_UP - _correctAnswersAtCurrentLevel;
+                    _hud.setStateText("Benar! +" + trialResult.scoreEarned + " pts");
+                    _hud.setInstructionText("Bagus! " + remaining + " jawaban benar lagi untuk naik level." + comparisonText);
+                }
+                
                 if (DEBUG) {
                     trace("Trial " + _trialCount + ": CORRECT - +" + trialResult.scoreEarned + " pts, Streak: " + _currentStreak);
+                    trace("Correct at this level: " + _correctAnswersAtCurrentLevel + "/" + CORRECT_ANSWERS_TO_LEVEL_UP);
                 }
             } else {
-                _hud.setStateText("Incorrect");
-                _hud.setInstructionText("Try again. Watch carefully next time." + comparisonText);
+                // Reset progress at current level on wrong answer
+                _correctAnswersAtCurrentLevel = 0;
+                _hud.setStateText("Salah");
+                _hud.setInstructionText("Coba lagi! Progress level direset." + comparisonText);
                 if (DEBUG) {
-                    trace("Trial " + _trialCount + ": INCORRECT - Streak reset");
+                    trace("Trial " + _trialCount + ": INCORRECT - Streak reset, level progress reset");
                 }
             }
 
@@ -622,13 +710,14 @@ package game {
         }
         
         /**
-         * Count correct items for partial accuracy
+         * Count correct items for partial accuracy - NEW SYSTEM
          */
-        private function countCorrectItems():int {
+        private function countCorrectItemsNew():int {
             var count:int = 0;
-            var minLen:int = Math.min(_currentSequence.length, _userInput.length);
+            var correctAnswer:Array = _currentQuestion.correctAnswer;
+            var minLen:int = Math.min(correctAnswer.length, _userAnswerArray.length);
             for (var i:int = 0; i < minLen; i++) {
-                if (_currentSequence[i].id == _userInput[i]) {
+                if (correctAnswer[i] == _userAnswerArray[i]) {
                     count++;
                 }
             }

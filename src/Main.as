@@ -18,7 +18,8 @@ package {
     import flash.geom.Rectangle;
     import flash.filesystem.File;
     import flash.utils.getTimer;
-    import generation.SequenceGenerator;
+    import generation.QuestionGenerator;
+    import generation.NumberQuestion;
     import input.InputManager;
     import domain.StimulusItem;
     import domain.TrialResult;
@@ -632,16 +633,13 @@ package {
             // Disable upgrade button while trial is active
             _gameScreen.setUpgradeButtonEnabled(false);
             
-            // Show trial popup with current difficulty
-            _trialPopup.setDifficulty(_currentDifficulty);
-            _trialPopup.show(_currentDifficulty);
+            // Show trial popup - level progression is handled internally by TrialPopup
+            _trialPopup.show();
         }
         
         /**
          * Handle trial success
-         * Flow:
-         * - Correct 1-2x: Enlarge random block
-         * - Correct 3x: Add new block (reset streak)
+         * NEW SYSTEM: Process upgrade based on streak (1-11)
          */
         private function onTrialSuccess(event:Event):void {
             _correctStreak++;
@@ -653,36 +651,59 @@ package {
             
             var center:Object = _gameScreen.getCastleCenter();
             
-            if (_correctStreak >= 3) {
-                // Third correct in a row - add new block
-                _gameScreen.addNewBlock();
-                _correctStreak = 0; // Reset streak
-                
-                if (DEBUG) {
-                    trace("[Main] Added new block! Streak reset. Total blocks: " + _gameScreen.getBlockCount());
-                }
-                
-                // Show big effect for adding new block
-                _effectsManager.playStreakEffect(center.x, center.y - 40, 3);
-                _gameScreen.showUpgradeAlert("New Block Added!");
-            } else {
-                // First or second correct - enlarge random block
-                _gameScreen.enlargeRandomBlock();
-                
-                if (DEBUG) {
-                    trace("[Main] Enlarged random block. Streak: " + _correctStreak);
-                }
-                
-                // Show effect
-                _effectsManager.playCorrectEffect(center.x, center.y, _correctStreak * 10);
+            // Process upgrade based on streak (1-11 system)
+            _gameScreen.processUpgrade(_correctStreak);
+            
+            // Show different alerts based on streak
+            var alertMsg:String = "";
+            switch (_correctStreak) {
+                case 1:
+                case 2:
+                    alertMsg = "Tower Growing!";
+                    _effectsManager.playCorrectEffect(center.x, center.y, _correctStreak * 10);
+                    break;
+                case 3:
+                    alertMsg = "New Tower Added!";
+                    _effectsManager.playStreakEffect(center.x, center.y - 40, 3);
+                    break;
+                case 4:
+                case 5:
+                    alertMsg = "Side Tower Growing!";
+                    _effectsManager.playCorrectEffect(center.x, center.y, _correctStreak * 10);
+                    break;
+                case 6:
+                    alertMsg = "Second Tower Added!";
+                    _effectsManager.playStreakEffect(center.x, center.y - 40, 3);
+                    break;
+                case 7:
+                case 8:
+                    alertMsg = "Tower Expanding!";
+                    _effectsManager.playCorrectEffect(center.x, center.y, _correctStreak * 10);
+                    break;
+                case 9:
+                    alertMsg = "Roofs Added!";
+                    _effectsManager.playStreakEffect(center.x, center.y - 40, 3);
+                    break;
+                case 10:
+                case 11:
+                    alertMsg = "Roofs Growing!";
+                    _effectsManager.playCorrectEffect(center.x, center.y, _correctStreak * 10);
+                    break;
+                default:
+                    alertMsg = "Castle Upgraded!";
+                    _effectsManager.playCorrectEffect(center.x, center.y, 10);
+            }
+            
+            _gameScreen.showUpgradeAlert(alertMsg);
+            
+            if (DEBUG) {
+                trace("[Main] Upgrade processed. Streak: " + _correctStreak);
             }
         }
         
         /**
          * Handle trial fail
-         * Flow:
-         * - Wrong 1-2x: Shrink random block
-         * - Wrong 3x: Remove random block (reset streak)
+         * NEW SYSTEM: Shrink castle on wrong answer
          */
         private function onTrialFail(event:Event):void {
             _wrongStreak++;
@@ -694,30 +715,8 @@ package {
             
             var center:Object = _gameScreen.getCastleCenter();
             
-            if (_wrongStreak >= 3) {
-                // Third wrong in a row - remove random block
-                var removed:Boolean = _gameScreen.removeRandomBlock();
-                _wrongStreak = 0; // Reset streak
-                
-                if (removed) {
-                    if (DEBUG) {
-                        trace("[Main] Removed random block! Streak reset. Total blocks: " + _gameScreen.getBlockCount());
-                    }
-                    _gameScreen.showUpgradeAlert("Block Removed!");
-                } else {
-                    if (DEBUG) {
-                        trace("[Main] Cannot remove - only 1 block left");
-                    }
-                }
-                
-            } else {
-                // First or second wrong - shrink random block
-                _gameScreen.shrinkRandomBlock();
-                
-                if (DEBUG) {
-                    trace("[Main] Shrunk random block. Wrong streak: " + _wrongStreak);
-                }
-            }
+            // Process wrong - shrink castle
+            _gameScreen.processWrong();
             
             // Show wrong effect
             _effectsManager.playWrongEffect(center.x, center.y);
