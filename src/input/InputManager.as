@@ -635,6 +635,14 @@ package input {
                 trace("Input submitted: " + _inputBuffer.join(","));
             }
         }
+        
+        /**
+         * Force submit current input buffer (called externally)
+         * Used for auto-submit after enough inputs received
+         */
+        public function forceSubmit():void {
+            submitInput();
+        }
 
         /**
          * Get current input buffer (read-only)
