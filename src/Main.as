@@ -640,6 +640,7 @@ package {
         /**
          * Handle trial success
          * NEW SYSTEM: Process upgrade based on streak (1-11)
+         * Note: Castle animation is now triggered after popup closes (in onTrialClosed)
          */
         private function onTrialSuccess(event:Event):void {
             _correctStreak++;
@@ -649,61 +650,49 @@ package {
                 trace("[Main] Trial SUCCESS! Correct streak: " + _correctStreak);
             }
             
-            var center:Object = _gameScreen.getCastleCenter();
-            
-            // Process upgrade based on streak (1-11 system)
-            _gameScreen.processUpgrade(_correctStreak);
-            
             // Show different alerts based on streak
             var alertMsg:String = "";
             switch (_correctStreak) {
                 case 1:
                 case 2:
                     alertMsg = "Tower Growing!";
-                    _effectsManager.playCorrectEffect(center.x, center.y, _correctStreak * 10);
                     break;
                 case 3:
                     alertMsg = "New Tower Added!";
-                    _effectsManager.playStreakEffect(center.x, center.y - 40, 3);
                     break;
                 case 4:
                 case 5:
                     alertMsg = "Side Tower Growing!";
-                    _effectsManager.playCorrectEffect(center.x, center.y, _correctStreak * 10);
                     break;
                 case 6:
                     alertMsg = "Second Tower Added!";
-                    _effectsManager.playStreakEffect(center.x, center.y - 40, 3);
                     break;
                 case 7:
                 case 8:
                     alertMsg = "Tower Expanding!";
-                    _effectsManager.playCorrectEffect(center.x, center.y, _correctStreak * 10);
                     break;
                 case 9:
                     alertMsg = "Roofs Added!";
-                    _effectsManager.playStreakEffect(center.x, center.y - 40, 3);
                     break;
                 case 10:
                 case 11:
                     alertMsg = "Roofs Growing!";
-                    _effectsManager.playCorrectEffect(center.x, center.y, _correctStreak * 10);
                     break;
                 default:
                     alertMsg = "Castle Upgraded!";
-                    _effectsManager.playCorrectEffect(center.x, center.y, 10);
             }
             
             _gameScreen.showUpgradeAlert(alertMsg);
             
             if (DEBUG) {
-                trace("[Main] Upgrade processed. Streak: " + _correctStreak);
+                trace("[Main] Upgrade will be processed after popup closes. Streak: " + _correctStreak);
             }
         }
         
         /**
          * Handle trial fail
          * NEW SYSTEM: Shrink castle on wrong answer
+         * Note: Castle animation is now triggered after popup closes (in onTrialClosed)
          */
         private function onTrialFail(event:Event):void {
             _wrongStreak++;
@@ -712,25 +701,57 @@ package {
             if (DEBUG) {
                 trace("[Main] Trial FAIL! Wrong streak: " + _wrongStreak);
             }
-            
-            var center:Object = _gameScreen.getCastleCenter();
-            
-            // Process wrong - shrink castle
-            _gameScreen.processWrong();
-            
-            // Show wrong effect
-            _effectsManager.playWrongEffect(center.x, center.y);
         }
         
         /**
          * Handle trial closed
+         * Now triggers castle animation and effects AFTER popup is closed
          */
         private function onTrialClosed(event:Event):void {
             if (DEBUG) {
-                trace("[Main] Trial popup closed - castle changes visible");
+                trace("[Main] Trial popup closed - triggering castle animation");
+                trace("[Main] Wrong streak: " + _wrongStreak + ", Correct streak: " + _correctStreak);
             }
             
-            // Hide alert after popup closes
+            var center:Object = _gameScreen.getCastleCenter();
+            var wasSuccess:Boolean = _trialPopup.getLastTrialResult();
+            
+            if (wasSuccess) {
+                // Process upgrade based on streak (1-11 system)
+                _gameScreen.processUpgrade(_correctStreak);
+                
+                // Play effects based on streak
+                switch (_correctStreak) {
+                    case 3:
+                    case 6:
+                    case 9:
+                        // New structure added - bigger effect
+                        _effectsManager.playStreakEffect(center.x, center.y - 40, 3);
+                        break;
+                    default:
+                        // Growth - normal effect
+                        _effectsManager.playCorrectEffect(center.x, center.y, _correctStreak * 10);
+                }
+            } else {
+                // Check if wrong 3 times in a row - remove a tower
+                if (_wrongStreak >= 3 && _gameScreen.hasSideTowers()) {
+                    // Remove a side tower with animation
+                    _gameScreen.removeSideTower();
+                    _wrongStreak = 0; // Reset wrong streak after removing tower
+                    
+                    if (DEBUG) {
+                        trace("[Main] 3 wrong answers - removing side tower!");
+                    }
+                } else {
+                    // Just shrink castle normally
+                    _gameScreen.processWrong();
+                }
+                
+                // Show wrong effect
+                _effectsManager.playWrongEffect(center.x, center.y);
+            }
+            
+            // Hide alert after a delay
             _gameScreen.hideUpgradeAlert();
             
             // Re-enable upgrade button
