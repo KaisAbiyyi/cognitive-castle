@@ -8,12 +8,12 @@ package ui {
     import flash.events.Event;
     import flash.events.MouseEvent;
     import castle.TowerCastle;
+    import ui.HUD; // Import class HUD
     
     /**
      * GameScreen - Main game screen with FULL WINDOW castle view and upgrade button.
      * Auto-resizing layout that adapts to any window size.
-     * 
-     * Layout:
+     * * Layout:
      * - Window frame (black border) - scales with window
      * - Castle FULL WINDOW (using TowerCastle) - fills available space
      * - Upgrade button (bottom left) - responsive size and position
@@ -46,6 +46,9 @@ package ui {
         private var _alertPopup:Sprite;
         private var _alertText:TextField;
         
+        // HUD Component
+        private var _hud:HUD;
+        
         // State
         private var _isAlertVisible:Boolean = false;
         
@@ -70,11 +73,29 @@ package ui {
             createWindowFrame();
             createBlockCastle();
             createUpgradeButton();
+            
+            // Initialize HUD
+            createHUD();
+            
             createAlertPopup();
             
             if (DEBUG) {
                 trace("[GameScreen] Initialized with size: " + stageWidth + "x" + stageHeight);
             }
+        }
+        
+        /**
+         * Create and setup HUD
+         */
+        private function createHUD():void {
+            _hud = new HUD();
+            _hud.initialize(_stageWidth, _stageHeight);
+            
+            // PENTING: Hapus background bawaan HUD agar tidak menutupi Kastil
+            // HUD.as secara default menggambar background warna solid di initialize()
+            _hud.graphics.clear();
+            
+            addChild(_hud);
         }
         
         /**
@@ -203,6 +224,7 @@ package ui {
             // Vertical line
             g.moveTo(centerX, centerY - iconSize / 2);
             g.lineTo(centerX, centerY + iconSize / 2);
+            
             // Circle around
             g.lineStyle(strokeWidth * 0.7, 0x333333);
             g.drawCircle(centerX, centerY, iconSize / 2 + _buttonSize * 0.1);
@@ -439,13 +461,15 @@ package ui {
             drawBackground();
             drawWindowFrame();
             updateBlockCastle();
-            
-            // Redraw and reposition button
             drawUpgradeButton();
             positionUpgradeButton();
-            
-            // Reposition alert
             positionAlertPopup();
+            
+            // Resize HUD
+            if (_hud) {
+                _hud.initialize(_stageWidth, _stageHeight);
+                _hud.graphics.clear(); // Ensure background stays clear
+            }
             
             if (DEBUG) {
                 trace("[GameScreen] Resized to: " + stageWidth + "x" + stageHeight);
@@ -455,5 +479,10 @@ package ui {
         // Getters
         public function get stageWidth():Number { return _stageWidth; }
         public function get stageHeight():Number { return _stageHeight; }
+        
+        // === FIX: Add HUD getter ===
+        public function get hud():HUD {
+            return _hud;
+        }
     }
 }
