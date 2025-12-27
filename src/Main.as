@@ -1,404 +1,242 @@
 package {
-    import flash.display.Sprite;
-    import flash.display.StageAlign;
-    import flash.display.StageScaleMode;
-    import flash.events.Event;
-    import flash.events.MouseEvent;
-    import flash.events.AsyncErrorEvent;
-    import flash.events.NetStatusEvent;
-    import flash.net.NetConnection;
-    import flash.net.NetStream;
+    import flash.display.*;
+    import flash.events.*;
+    import flash.net.*;
     import flash.media.Video;
-    import flash.media.StageVideo;
-    import flash.geom.Rectangle;
     import flash.filesystem.File;
     import flash.utils.getTimer;
     import flash.text.TextField;
     import flash.text.TextFormat;
-    import flash.system.Capabilities;
     
-    // Import Game Components
     import config.StimulusConfig;
     import castle.EffectsManager;
     import game.GameController;
-    
-    // Import UI Classes (Yang baru diperbarui)
-    import ui.MainMenu;
-    import ui.SettingsMenu;
-    import ui.AboutUsPanel;
-    import ui.GameScreen;
-    import ui.TrialPopup;
-    import ui.HUD; 
-    
-    /**
-     * Main - Application Entry Point
-     * Mengatur Video Intro, Navigasi Menu, dan Inisialisasi Game.
-     */
-    public class Main extends Sprite {
-        
-        // Debug flag
-        private static const DEBUG:Boolean = true;
-        
-        // Video Components
-        private var _videoContainer:Sprite;
-        private var _video:Video;
-        private var _stageVideo:StageVideo;
-        private var _useStageVideo:Boolean = false;
-        private var _netConnection:NetConnection;
-        private var _netStream:NetStream;
-        private var _videoCompleted:Boolean = false;
-        private var _skipButton:Sprite;
-        private var _skipButtonVisible:Boolean = false;
-        private var _videoStartTime:Number = 0;
-        private var _videoDuration:Number = 0;
-        private var _videoOriginalWidth:Number = 0;
-        private var _videoOriginalHeight:Number = 0;
+    import services.AudioManager;
+    import ui.*;
 
-        // UI Components
+    public class Main extends Sprite {
+        private var _videoContainer:Sprite;
+        private var _skipBtn:Sprite;
+        private var _ns:NetStream;
+        private var _videoStart:Number;
+        private var _skipBtnWidth:Number = 140;
+        private var _skipBtnHeight:Number = 56;
+        private var _skipHoverScale:Number = 0.96;
+        private var _skipNormalScale:Number = 1.0;
+        private var _skipBaseX:Number = 0;
+        private var _skipBaseY:Number = 0;
+        
+        // UI
         private var _mainMenu:MainMenu;
         private var _settingsMenu:SettingsMenu;
-        private var _aboutUsPanel:AboutUsPanel;
-        
-        // Game Screens
+        private var _aboutUs:AboutUsPanel;
+        private var _lessons:LessonsPanel;
         private var _gameScreen:GameScreen;
         private var _trialPopup:TrialPopup;
-        private var _effectsManager:EffectsManager;
-        
-        // Game State
-        private var _isInGame:Boolean = false;
-        private var _currentDifficulty:int = 1;
-        private var _correctStreak:int = 0;
-        private var _wrongStreak:int = 0;
 
         public function Main() {
-            // 1. Setup stage
-            if (stage) {
-                init();
-            } else {
-                addEventListener(Event.ADDED_TO_STAGE, init);
-            }
+            stage ? init() : addEventListener(Event.ADDED_TO_STAGE, init);
         }
         
         private function init(e:Event = null):void {
             removeEventListener(Event.ADDED_TO_STAGE, init);
-            
-            stage.scaleMode = StageScaleMode.NO_SCALE;
+            stage.scaleMode = StageScaleMode.NO_SCALE; 
             stage.align = StageAlign.TOP_LEFT;
-            stage.addEventListener(Event.RESIZE, onStageResize);
-
-            // 2. Update config
+            stage.addEventListener(Event.RESIZE, onResize);
             StimulusConfig.updateForStageSize(stage.stageWidth, stage.stageHeight);
-
-            if (DEBUG) {
-                trace("===== COGNITIVE CASTLE STARTED =====");
-                trace("Stage Size: " + stage.stageWidth + "x" + stage.stageHeight);
-            }
             
-            // 3. Play opening video first
-            playOpeningVideo();
+            playIntro();
         }
-        
-        // ==========================================
-        // VIDEO PLAYER LOGIC
-        // ==========================================
-        
-        private function playOpeningVideo():void {
-            if (DEBUG) trace("[Main] Playing opening video...");
-            _netConnection = new NetConnection();
-            _netConnection.connect(null);
-            
-            _netStream = new NetStream(_netConnection);
-            _netStream.addEventListener(NetStatusEvent.NET_STATUS, onVideoStatus);
-            _netStream.addEventListener(AsyncErrorEvent.ASYNC_ERROR, onVideoError);
-            
-            var client:Object = {};
-            client.onMetaData = onVideoMetaData;
-            client.onCuePoint = function(info:Object):void {};
-            client.onPlayStatus = function(info:Object):void {};
-            _netStream.client = client;
-            
-            _video = new Video(1280, 720);
-            _video.width = stage.stageWidth;
-            _video.height = stage.stageHeight;
-            _video.smoothing = true;
-            _video.attachNetStream(_netStream);
 
-            _videoContainer = new Sprite();
-            _videoContainer.addChild(_video);
-            addChild(_videoContainer);
+        // --- Video Logic ---
+        private function playIntro():void {
+            var nc:NetConnection = new NetConnection(); nc.connect(null);
+            _ns = new NetStream(nc);
+            _ns.client = { onMetaData: function(o:Object):void{} };
+            _ns.addEventListener(NetStatusEvent.NET_STATUS, function(e:NetStatusEvent):void { if(e.info.code == "NetStream.Play.Stop") endIntro(); });
+
+            var vid:Video = new Video(1280, 720); vid.attachNetStream(_ns); vid.smoothing = true;
+            _videoContainer = new Sprite(); _videoContainer.addChild(vid); addChild(_videoContainer);
             
-            // File video assets/videoOpening.mp4
-            var videoFile:File = File.applicationDirectory.resolvePath("assets/videoOpening.mp4");
-            
-            if (!videoFile.exists) {
-                trace("[Main] ERROR: Video file not found! Skipping to menu.");
-                onVideoComplete(); // Langsung ke menu jika video tidak ada
-                return;
-            }
-            
-            _netStream.play(videoFile.url);
-            _videoStartTime = getTimer();
-            createSkipButton();
-            addEventListener(Event.ENTER_FRAME, onVideoEnterFrame);
+            // Resize logic simple
+            var scale:Number = Math.max(stage.stageWidth/1280, stage.stageHeight/720);
+            vid.width = 1280*scale; vid.height = 720*scale;
+            vid.x = (stage.stageWidth-vid.width)/2; vid.y = (stage.stageHeight-vid.height)/2;
+
+            var f:File = File.applicationDirectory.resolvePath("assets/videoOpening.mp4");
+            if(f.exists) { _ns.play(f.url); _videoStart = getTimer(); addEventListener(Event.ENTER_FRAME, checkSkip); } 
+            else endIntro();
         }
-        
+
+        private function checkSkip(e:Event):void {
+            // Tampilkan tombol skip setelah 2 detik
+            if (getTimer() - _videoStart > 2000) {
+                removeEventListener(Event.ENTER_FRAME, checkSkip);
+                createSkipButton();
+            }
+        }
+
         private function createSkipButton():void {
-            _skipButton = new Sprite();
-            _skipButton.graphics.beginFill(0x000000, 0.7);
-            _skipButton.graphics.lineStyle(2, 0xFFFFFF);
-            _skipButton.graphics.drawRoundRect(0, 0, 120, 40, 10, 10);
-            _skipButton.graphics.endFill();
-            
-            var skipText:TextField = new TextField();
-            var format:TextFormat = new TextFormat("Arial", 18, 0xFFFFFF, true);
-            format.align = "center";
-            skipText.defaultTextFormat = format;
-            skipText.text = "Skip ▶▶";
-            skipText.width = 120;
-            skipText.height = 30;
-            skipText.y = 8;
-            skipText.selectable = false;
-            skipText.mouseEnabled = false;
-            _skipButton.addChild(skipText);
-            
-            _skipButton.x = stage.stageWidth - 140;
-            _skipButton.y = stage.stageHeight - 60;
-            _skipButton.visible = false;
-            _skipButton.alpha = 0;
-            _skipButton.buttonMode = true;
-            _skipButton.addEventListener(MouseEvent.CLICK, onSkipButtonClick);
-            
-            _videoContainer.addChild(_skipButton);
-        }
-        
-        private function onVideoEnterFrame(event:Event):void {
-            if (_videoCompleted) return;
-            var elapsedTime:Number = (getTimer() - _videoStartTime) / 1000;
-            // Munculkan tombol skip setelah 2 detik
-            if (!_skipButtonVisible && elapsedTime >= 2) {
-                _skipButtonVisible = true;
-                _skipButton.visible = true;
-                _skipButton.alpha = 1; // Simplifikasi fade in
-            }
-        }
-        
-        private function onSkipButtonClick(event:MouseEvent):void {
-            event.stopPropagation();
-            onVideoComplete();
-        }
-        
-        private function onVideoMetaData(info:Object):void {
-            _videoDuration = info.duration || 0;
-            _videoOriginalWidth = info.width || 1280;
-            _videoOriginalHeight = info.height || 720;
-            resizeVideo();
-        }
-        
-        private function resizeVideo():void {
-            if (_videoCompleted || !_video) return;
-            if (_videoOriginalWidth == 0 || _videoOriginalHeight == 0) return;
-            
-            var scale:Number = Math.max(stage.stageWidth / _videoOriginalWidth, stage.stageHeight / _videoOriginalHeight);
-            var scaledWidth:Number = _videoOriginalWidth * scale;
-            var scaledHeight:Number = _videoOriginalHeight * scale;
-            
-            _video.width = scaledWidth;
-            _video.height = scaledHeight;
-            _video.x = (stage.stageWidth - scaledWidth) / 2;
-            _video.y = (stage.stageHeight - scaledHeight) / 2;
-            
-            if (_skipButton) {
-                _skipButton.x = stage.stageWidth - 140;
-                _skipButton.y = stage.stageHeight - 60;
-            }
-        }
-        
-        private function onVideoStatus(event:NetStatusEvent):void {
-            if (event.info.code == "NetStream.Play.Stop" || event.info.code == "NetStream.Play.Failed") {
-                onVideoComplete();
-            }
-        }
-        
-        private function onVideoError(event:AsyncErrorEvent):void {
-            onVideoComplete();
-        }
-        
-        private function onVideoComplete():void {
-            if (_videoCompleted) return;
-            _videoCompleted = true;
+            _skipBtn = new Sprite();
+            _skipBtn.buttonMode = true;
 
-            if (DEBUG) trace("[Main] Video complete - showing menu");
-            
-            removeEventListener(Event.ENTER_FRAME, onVideoEnterFrame);
-            
-            if (_netStream) {
-                _netStream.close();
-                _netStream = null;
-            }
-            
-            if (_videoContainer && contains(_videoContainer)) {
-                removeChild(_videoContainer);
-                _videoContainer = null;
-            }
-            
-            _video = null;
-            
-            // Masuk ke Menu Utama
-            initializeMenu();
+            // gunakan variabel kelas agar bisa dipakai oleh efek
+            var btnWidth:Number = _skipBtnWidth;
+            var btnHeight:Number = _skipBtnHeight;
+
+            // Simpan base position (pojok kanan bawah)
+            _skipBaseX = stage.stageWidth - (btnWidth + 20);
+            _skipBaseY = stage.stageHeight - (btnHeight + 20);
+
+            // apply normal scale and position
+            applySkipScale(_skipNormalScale);
+
+            _skipBtn.addEventListener(MouseEvent.CLICK, function(e:Event):void { endIntro(); });
+            _skipBtn.addEventListener(MouseEvent.MOUSE_OVER, onSkipOver);
+            _skipBtn.addEventListener(MouseEvent.MOUSE_OUT, onSkipOut);
+            addChild(_skipBtn);
+
+            // 1. Coba Load Gambar
+            var loader:Loader = new Loader();
+            loader.contentLoaderInfo.addEventListener(Event.COMPLETE, function(e:Event):void {
+                var bmp:Bitmap = e.target.content as Bitmap;
+                bmp.smoothing = true;
+
+                // --- PAKSA UKURAN GAMBAR AGAR KECIL ---
+                bmp.width = btnWidth;
+                bmp.height = btnHeight;
+
+                _skipBtn.addChild(bmp);
+                // pastikan posisi/scale tetap
+                applySkipScale(_skipNormalScale);
+            });
+
+            // 2. Fallback (Jika gambar gagal dimuat)
+            loader.contentLoaderInfo.addEventListener(IOErrorEvent.IO_ERROR, function(e:Event):void {
+                _skipBtn.graphics.beginFill(0x000000, 0.5);
+                _skipBtn.graphics.drawRect(0, 0, btnWidth, btnHeight); // Gunakan ukuran yg sama
+
+                var tf:TextField = new TextField();
+                var fmt:TextFormat = new TextFormat("Arial", 14, 0xFFFFFF, true); // Font size diperkecil (14)
+                tf.defaultTextFormat = fmt;
+                tf.text = "SKIP >>";
+                tf.autoSize = "left";
+                tf.x = (btnWidth - tf.width) / 2;
+                tf.y = (btnHeight - tf.height) / 2;
+                _skipBtn.addChild(tf);
+                applySkipScale(_skipNormalScale);
+            });
+
+            // Mulai load
+            try { loader.load(new URLRequest("assets/Gambar/Skip.png")); } catch(e:Error) {}
         }
 
-        // ==========================================
-        // MENU SYSTEM LOGIC
-        // ==========================================
-        
-        private function initializeMenu():void {
-            // 1. Create Main Menu
+        private function endIntro():void {
+            if(_ns) _ns.close();
+            if(_videoContainer && contains(_videoContainer)) removeChild(_videoContainer);
+            if(_skipBtn) {
+                try {
+                    _skipBtn.removeEventListener(MouseEvent.MOUSE_OVER, onSkipOver);
+                    _skipBtn.removeEventListener(MouseEvent.MOUSE_OUT, onSkipOut);
+                    _skipBtn.removeEventListener(MouseEvent.CLICK, endIntro);
+                } catch(err:Error) {}
+                if (contains(_skipBtn)) removeChild(_skipBtn);
+            }
+            initMenu();
+        }
+
+        // --- Menu Logic ---
+        private function initMenu():void {
+            AudioManager.getInstance().init();
+            
             _mainMenu = new MainMenu();
-            _mainMenu.initialize(stage.stageWidth, stage.stageHeight);
-            _mainMenu.addEventListener(MainMenu.PLAY_CLICKED, onPlayClicked);
-            _mainMenu.addEventListener(MainMenu.SETTINGS_CLICKED, onSettingsClicked);
-            _mainMenu.addEventListener(MainMenu.ABOUT_US_CLICKED, onAboutUsClicked);
-            addChild(_mainMenu);
-            
-            // 2. Create Settings Menu (Hidden by default)
             _settingsMenu = new SettingsMenu();
-            _settingsMenu.initialize(stage.stageWidth, stage.stageHeight);
-            _settingsMenu.addEventListener(SettingsMenu.CLOSE_CLICKED, onSettingsClose);
-            addChild(_settingsMenu);
+            _aboutUs = new AboutUsPanel();
+            _lessons = new LessonsPanel();
             
-            // 3. Create About Us Panel (Hidden by default)
-            _aboutUsPanel = new AboutUsPanel();
-            _aboutUsPanel.initialize(stage.stageWidth, stage.stageHeight);
-            _aboutUsPanel.addEventListener(AboutUsPanel.CLOSE_CLICKED, onAboutUsClose);
-            addChild(_aboutUsPanel);
+            var addUI:Function = function(ui:*):void { 
+                var uiObj:Object = ui; 
+                if(uiObj.hasOwnProperty("initialize")) {
+                    uiObj.initialize(stage.stageWidth, stage.stageHeight); 
+                }
+                addChild(ui as DisplayObject); 
+            };
             
-            if (DEBUG) trace("[Main] Menu system initialized");
-        }
-        
-        // --- Navigation Handlers ---
+            addUI(_mainMenu); addUI(_settingsMenu); addUI(_aboutUs); addUI(_lessons);
 
-        private function onPlayClicked(event:Event):void {
-            if (DEBUG) trace("[Main] Play clicked - STARTING GAME");
+            // Wiring Events
+            _mainMenu.addEventListener(MainMenu.PLAY_CLICKED, function(e:Event):void {
+                _mainMenu.visible = false;
+                AudioManager.getInstance().stopMusic(); 
+                startGame();
+            });
             
-            // Sembunyikan dan nonaktifkan menu
-            _mainMenu.visible = false;
+            // Navigasi
+            var openPanel:Function = function(panel:MovieClip):void { _mainMenu.visible = false; panel.show(); };
+            var closePanel:Function = function(e:Event):void { (e.target as MovieClip).hide(); _mainMenu.visible = true; };
+
+            _mainMenu.addEventListener(MainMenu.SETTINGS_CLICKED, function(e:Event):void { _settingsMenu.show(); });
+            _settingsMenu.addEventListener(SettingsMenu.CLOSE_CLICKED, function(e:Event):void { _settingsMenu.hide(); });
+
+            _mainMenu.addEventListener(MainMenu.ABOUT_US_CLICKED, function(e:Event):void { openPanel(_aboutUs); });
+            _aboutUs.addEventListener(AboutUsPanel.CLOSE_CLICKED, closePanel);
+
+            _mainMenu.addEventListener(MainMenu.LESSONS_CLICKED, function(e:Event):void { openPanel(_lessons); });
+            _lessons.addEventListener(LessonsPanel.CLOSE_CLICKED, closePanel);
             
-            // Mulai Game
-            initializeGame();
-        }
-        
-        private function onSettingsClicked(event:Event):void {
-            // Sembunyikan Main Menu, Tampilkan Settings
-            _mainMenu.visible = false;
-            _settingsMenu.show();
-        }
-        
-        private function onSettingsClose(event:Event):void {
-            // Sembunyikan Settings, Tampilkan Main Menu
-            _settingsMenu.hide();
-            _mainMenu.visible = true;
-        }
-        
-        private function onAboutUsClicked(event:Event):void {
-            // Sembunyikan Main Menu, Tampilkan About Us
-            _mainMenu.visible = false;
-            _aboutUsPanel.show();
-        }
-        
-        private function onAboutUsClose(event:Event):void {
-            // Sembunyikan About Us, Tampilkan Main Menu
-            _aboutUsPanel.hide();
-            _mainMenu.visible = true;
+            _settingsMenu.setPlusButtonPosition(335, -45);
+            _settingsMenu.setMinButtonPosition(-430, -45);
+            
+            AudioManager.getInstance().playMusic("Bgmlobby");
         }
 
-        // ==========================================
-        // GAME LOGIC
-        // ==========================================
-
-        private function initializeGame():void {
-            _isInGame = true;
-            
-            // 1. Create Game Screen (Visuals + HUD)
-            _gameScreen = new GameScreen();
-            _gameScreen.initialize(stage.stageWidth, stage.stageHeight);
-            _gameScreen.addEventListener(GameScreen.UPGRADE_CLICKED, onUpgradeClicked);
+        // --- Game Logic ---
+        private function startGame():void {
+            _gameScreen = new GameScreen(); _gameScreen.initialize(stage.stageWidth, stage.stageHeight);
             addChild(_gameScreen);
             
-            // 2. Create Popup
-            _trialPopup = new TrialPopup();
-            _trialPopup.initialize(stage.stageWidth, stage.stageHeight);
-            _trialPopup.addEventListener(TrialPopup.TRIAL_SUCCESS, onTrialSuccess);
-            _trialPopup.addEventListener(TrialPopup.TRIAL_FAIL, onTrialFail);
-            _trialPopup.addEventListener(TrialPopup.TRIAL_CLOSED, onTrialClosed);
+            _trialPopup = new TrialPopup(); _trialPopup.initialize(stage.stageWidth, stage.stageHeight);
             addChild(_trialPopup);
             
-            // 3. Setup Effects
-            _effectsManager = EffectsManager.getInstance();
-            _effectsManager.setParent(this);
+            GameController.getInstance().initialize(_gameScreen.hud);
+            GameController.getInstance().startNextTrial();
             
-            // 4. Start Game Controller
-            if (_gameScreen.hud) {
-                var gameCtrl:GameController = GameController.getInstance();
-                gameCtrl.initialize(_gameScreen.hud);
-                gameCtrl.startNextTrial();
-                if (DEBUG) trace("[Main] GameController initialized & First Trial Started");
-            } else {
-                trace("[Main] ERROR: HUD property not found in GameScreen!");
-            }
-        }
-        
-        private function onUpgradeClicked(event:Event):void {
-            _gameScreen.setUpgradeButtonEnabled(false);
-            _trialPopup.show();
-        }
-        
-        private function onTrialSuccess(event:Event):void {
-            _correctStreak++;
-            _wrongStreak = 0;
-            _gameScreen.showUpgradeAlert("Castle Upgraded!");
-        }
-        
-        private function onTrialFail(event:Event):void {
-            _wrongStreak++;
-            _correctStreak = 0;
-        }
-        
-        private function onTrialClosed(event:Event):void {
-            var center:Object = _gameScreen.getCastleCenter();
-            var wasSuccess:Boolean = _trialPopup.getLastTrialResult();
-            
-            if (wasSuccess) {
-                _gameScreen.processUpgrade(_correctStreak);
-                _effectsManager.playCorrectEffect(center.x, center.y, _correctStreak * 10);
-            } else {
-                if (_wrongStreak >= 3 && _gameScreen.hasSideTowers()) {
-                    _gameScreen.removeSideTower();
-                    _wrongStreak = 0;
-                } else {
-                    _gameScreen.processWrong();
-                }
-                _effectsManager.playWrongEffect(center.x, center.y);
-            }
-            
-            _gameScreen.hideUpgradeAlert();
-            _gameScreen.setUpgradeButtonEnabled(true);
+            _gameScreen.addEventListener(GameScreen.UPGRADE_CLICKED, function(e:Event):void { _trialPopup.show(); });
+            _trialPopup.addEventListener(TrialPopup.TRIAL_CLOSED, function(e:Event):void {
+               var center:Object = _gameScreen.getCastleCenter();
+               if (_trialPopup.getLastTrialResult()) {
+                   _gameScreen.processUpgrade(0);
+                   EffectsManager.getInstance().playCorrectEffect(center.x, center.y, 10);
+               } else {
+                   _gameScreen.processWrong();
+                   EffectsManager.getInstance().playWrongEffect(center.x, center.y);
+               }
+            });
+            EffectsManager.getInstance().setParent(this);
         }
 
-        private function onStageResize(event:Event):void {
-            if (!_videoCompleted && _video) {
-                resizeVideo();
-            }
-            
-            // Update UI components if they exist
+        private function onResize(e:Event):void {
             if (_mainMenu) _mainMenu.resize(stage.stageWidth, stage.stageHeight);
             if (_settingsMenu) _settingsMenu.resize(stage.stageWidth, stage.stageHeight);
-            if (_aboutUsPanel) _aboutUsPanel.resize(stage.stageWidth, stage.stageHeight);
-            
-            // Update Game components if in game
-            if (_isInGame) {
-                if (_gameScreen) _gameScreen.onResize(stage.stageWidth, stage.stageHeight);
-                if (_trialPopup) _trialPopup.resize(stage.stageWidth, stage.stageHeight);
-            }
+            if (_gameScreen) _gameScreen.onResize(stage.stageWidth, stage.stageHeight);
+        }
+
+        // --- Skip button hover helpers (shrink centered) ---
+        private function applySkipScale(s:Number):void {
+            try {
+                if (!_skipBtn) return;
+                _skipBtn.scaleX = _skipBtn.scaleY = s;
+                _skipBtn.x = _skipBaseX + (_skipBtnWidth * (1 - s) / 2);
+                _skipBtn.y = _skipBaseY + (_skipBtnHeight * (1 - s) / 2);
+            } catch(err:Error) {}
+        }
+
+        private function onSkipOver(e:MouseEvent):void {
+            try { applySkipScale(_skipHoverScale); } catch(err:Error) {}
+        }
+
+        private function onSkipOut(e:MouseEvent):void {
+            try { applySkipScale(_skipNormalScale); } catch(err:Error) {}
         }
     }
 }
