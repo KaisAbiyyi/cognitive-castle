@@ -1,11 +1,12 @@
 package services {
     
-    import flash.net.SharedObject;
-    import flash.utils.ByteArray;
+    import flash.filesystem.File;
+    import flash.filesystem.FileMode;
+    import flash.filesystem.FileStream;
     import core.Constants;
     
     /**
-     * SaveSystem - Handles game state persistence using SharedObject.
+     * SaveSystem - Handles game state persistence using a JSON file.
      * Includes save versioning, auto-save, backup, and basic anti-tamper protection.
      * 
      * SOLID Principles:
@@ -16,9 +17,11 @@ package services {
         
         private static var _instance:SaveSystem;
         
-        private var _sharedObject:SharedObject;
+        private static const SAVE_FILENAME:String = "cognitive_castle_save.json";
+
         private var _autoSaveCounter:int = 0;
         private var _backupSaves:Array = [];
+        private var _lastSavedSnapshot:Object = null;
         
         // Current save data in memory
         private var _currentData:SaveData;
@@ -37,13 +40,6 @@ package services {
          * Constructor
          */
         public function SaveSystem() {
-            try {
-                _sharedObject = SharedObject.getLocal(Constants.SAVE_KEY);
-            } catch (e:Error) {
-                trace("[SaveSystem] Error accessing SharedObject: " + e.message);
-                _sharedObject = null;
-            }
-            
             _currentData = new SaveData();
         }
         
@@ -51,7 +47,8 @@ package services {
          * Check if save data exists
          */
         public function hasExistingSave():Boolean {
-            return _sharedObject && _sharedObject.data && _sharedObject.data.version;
+            var saveFile:File = resolveSaveFileForRead();
+            return saveFile != null && saveFile.exists;
         }
         
         /**
@@ -59,14 +56,26 @@ package services {
          * @return True if load successful
          */
         public function loadState():Boolean {
-            if (!_sharedObject || !_sharedObject.data || !_sharedObject.data.version) {
-                trace("[SaveSystem] No save data found, using defaults");
-                _currentData = new SaveData();
-                return false;
-            }
-            
             try {
-                var data:Object = _sharedObject.data;
+                var saveFile:File = resolveSaveFileForRead();
+                if (!saveFile || !saveFile.exists) {
+                    trace("[SaveSystem] No save file found, using defaults");
+                    _currentData = new SaveData();
+                    return false;
+                }
+                
+                var stream:FileStream = new FileStream();
+                stream.open(saveFile, FileMode.READ);
+                var raw:String = stream.readUTFBytes(stream.bytesAvailable);
+                stream.close();
+                
+                if (!raw || raw.length == 0) {
+                    trace("[SaveSystem] Save file empty, using defaults");
+                    _currentData = new SaveData();
+                    return false;
+                }
+                
+                var data:Object = JSON.parse(raw);
                 
                 // Validate checksum
                 var storedChecksum:String = data.checksum;
@@ -81,41 +90,9 @@ package services {
                     }
                 }
                 
-                // Load data into SaveData object
-                _currentData = new SaveData();
-                _currentData.version = data.version;
-                _currentData.userId = data.userId;
-                _currentData.createdAt = data.createdAt;
-                _currentData.lastPlayedAt = data.lastPlayedAt;
-                _currentData.currentDifficulty = data.currentDifficulty || 1;
-                _currentData.currentMode = data.currentMode || Constants.MODE_FORWARD;
+                applyDataObject(data);
                 
-                // Load metrics
-                if (data.metrics) {
-                    _currentData.metrics.totalTrials = data.metrics.totalTrials || 0;
-                    _currentData.metrics.correctTrials = data.metrics.correctTrials || 0;
-                    _currentData.metrics.highestStreak = data.metrics.highestStreak || 0;
-                    _currentData.metrics.currentStreak = data.metrics.currentStreak || 0;
-                    _currentData.metrics.totalPlayTime = data.metrics.totalPlayTime || 0;
-                    _currentData.metrics.sessionsPlayed = data.metrics.sessionsPlayed || 0;
-                    _currentData.metrics.castleScore = data.metrics.castleScore || 0;
-                    _currentData.metrics.highestDifficulty = data.metrics.highestDifficulty || 1;
-                }
-                
-                // Load castle state
-                if (data.castleState) {
-                    _currentData.castleState = data.castleState;
-                }
-                
-                // Load settings
-                if (data.settings) {
-                    _currentData.settings.masterVolume = data.settings.masterVolume;
-                    _currentData.settings.sfxVolume = data.settings.sfxVolume;
-                    _currentData.settings.hapticEnabled = data.settings.hapticEnabled;
-                    _currentData.settings.colorBlindMode = data.settings.colorBlindMode;
-                }
-                
-                trace("[SaveSystem] Save loaded successfully, version: " + _currentData.version);
+                trace("[SaveSystem] Save loaded successfully from: " + saveFile.nativePath);
                 return true;
                 
             } catch (e:Error) {
@@ -123,6 +100,8 @@ package services {
                 _currentData = new SaveData();
                 return false;
             }
+            
+            return false;
         }
         
         /**
@@ -130,63 +109,50 @@ package services {
          * @return True if save successful
          */
         public function saveState():Boolean {
-            if (!_sharedObject) {
-                trace("[SaveSystem] SharedObject not available");
-                return false;
-            }
-            
             try {
                 // Create backup before saving
-                createBackup();
+                if (_lastSavedSnapshot) {
+                    createBackup(_lastSavedSnapshot);
+                }
                 
                 // Update timestamp
                 _currentData.lastPlayedAt = new Date().time;
                 
-                // Copy data to SharedObject
-                var data:Object = _sharedObject.data;
-                data.version = _currentData.version;
-                data.userId = _currentData.userId;
-                data.createdAt = _currentData.createdAt;
-                data.lastPlayedAt = _currentData.lastPlayedAt;
-                data.currentDifficulty = _currentData.currentDifficulty;
-                data.currentMode = _currentData.currentMode;
-                
-                // Save metrics
-                data.metrics = {
-                    totalTrials: _currentData.metrics.totalTrials,
-                    correctTrials: _currentData.metrics.correctTrials,
-                    highestStreak: _currentData.metrics.highestStreak,
-                    currentStreak: _currentData.metrics.currentStreak,
-                    totalPlayTime: _currentData.metrics.totalPlayTime,
-                    sessionsPlayed: _currentData.metrics.sessionsPlayed,
-                    castleScore: _currentData.metrics.castleScore,
-                    highestDifficulty: _currentData.metrics.highestDifficulty
-                };
-                
-                // Save castle state
-                data.castleState = _currentData.castleState;
-                
-                // Save settings
-                data.settings = {
-                    masterVolume: _currentData.settings.masterVolume,
-                    sfxVolume: _currentData.settings.sfxVolume,
-                    hapticEnabled: _currentData.settings.hapticEnabled,
-                    colorBlindMode: _currentData.settings.colorBlindMode
-                };
+                var data:Object = buildDataObject();
                 
                 // Calculate and store checksum
                 data.checksum = calculateChecksum(data);
                 
-                // Flush to disk
-                _sharedObject.flush();
+                var json:String = JSON.stringify(data);
+                var saveFile:File = resolveSaveFileForWrite();
+                var wrote:Boolean = writeToFile(saveFile, json);
                 
-                trace("[SaveSystem] Save successful");
+                if (!wrote) {
+                    var fallback:File = getFallbackSaveFile();
+                    if (fallback.nativePath != saveFile.nativePath) {
+                        wrote = writeToFile(fallback, json);
+                        if (wrote) {
+                            saveFile = fallback;
+                        }
+                    }
+                }
+                
+                if (!wrote) {
+                    trace("[SaveSystem] Error saving: unable to write save file");
+                    return false;
+                }
+                
+                _lastSavedSnapshot = data;
+                
+                trace("[SaveSystem] Save successful to: " + saveFile.nativePath);
                 return true;
                 
             } catch (e:Error) {
                 trace("[SaveSystem] Error saving: " + e.message);
                 return false;
             }
+            
+            return false;
         }
         
         /**
@@ -204,11 +170,26 @@ package services {
          * Delete all save data
          */
         public function deleteSave():void {
-            if (_sharedObject) {
-                _sharedObject.clear();
+            try {
+                var primary:File = getPrimarySaveFile();
+                if (primary && primary.exists) {
+                    primary.deleteFile();
+                }
+            } catch (e:Error) {
+                trace("[SaveSystem] Error deleting primary save: " + e.message);
+            }
+            
+            try {
+                var fallback:File = getFallbackSaveFile();
+                if (fallback && fallback.exists) {
+                    fallback.deleteFile();
+                }
+            } catch (e:Error) {
+                trace("[SaveSystem] Error deleting fallback save: " + e.message);
             }
             _currentData = new SaveData();
             _backupSaves = [];
+            _lastSavedSnapshot = null;
             trace("[SaveSystem] Save data deleted");
         }
         
@@ -217,6 +198,121 @@ package services {
          */
         public function get data():SaveData {
             return _currentData;
+        }
+
+        private function buildDataObject():Object {
+            var data:Object = {};
+            data.version = _currentData.version;
+            data.userId = _currentData.userId;
+            data.createdAt = _currentData.createdAt;
+            data.lastPlayedAt = _currentData.lastPlayedAt;
+            data.currentDifficulty = _currentData.currentDifficulty;
+            data.currentMode = _currentData.currentMode;
+            data.castleState = _currentData.castleState;
+            data.castleScale = _currentData.castleScale;
+            
+            data.metrics = {
+                totalTrials: _currentData.metrics.totalTrials,
+                correctTrials: _currentData.metrics.correctTrials,
+                highestStreak: _currentData.metrics.highestStreak,
+                currentStreak: _currentData.metrics.currentStreak,
+                totalPlayTime: _currentData.metrics.totalPlayTime,
+                sessionsPlayed: _currentData.metrics.sessionsPlayed,
+                castleScore: _currentData.metrics.castleScore,
+                highestDifficulty: _currentData.metrics.highestDifficulty
+            };
+            
+            data.settings = {
+                masterVolume: _currentData.settings.masterVolume,
+                sfxVolume: _currentData.settings.sfxVolume,
+                hapticEnabled: _currentData.settings.hapticEnabled,
+                colorBlindMode: _currentData.settings.colorBlindMode
+            };
+            
+            return data;
+        }
+
+        private function applyDataObject(data:Object):void {
+            _currentData = new SaveData();
+            _currentData.version = data.version || _currentData.version;
+            _currentData.userId = data.userId || _currentData.userId;
+            _currentData.createdAt = data.createdAt || _currentData.createdAt;
+            _currentData.lastPlayedAt = data.lastPlayedAt || _currentData.lastPlayedAt;
+            _currentData.currentDifficulty = data.currentDifficulty || 1;
+            _currentData.currentMode = data.currentMode || Constants.MODE_FORWARD;
+            _currentData.castleState = data.castleState || {};
+            _currentData.castleScale = (data.castleScale !== undefined) ? Number(data.castleScale) : NaN;
+            
+            if (data.metrics) {
+                _currentData.metrics.totalTrials = data.metrics.totalTrials || 0;
+                _currentData.metrics.correctTrials = data.metrics.correctTrials || 0;
+                _currentData.metrics.highestStreak = data.metrics.highestStreak || 0;
+                _currentData.metrics.currentStreak = data.metrics.currentStreak || 0;
+                _currentData.metrics.totalPlayTime = data.metrics.totalPlayTime || 0;
+                _currentData.metrics.sessionsPlayed = data.metrics.sessionsPlayed || 0;
+                _currentData.metrics.castleScore = data.metrics.castleScore || 0;
+                _currentData.metrics.highestDifficulty = data.metrics.highestDifficulty || 1;
+            }
+            
+            if (data.settings) {
+                _currentData.settings.masterVolume = data.settings.masterVolume;
+                _currentData.settings.sfxVolume = data.settings.sfxVolume;
+                _currentData.settings.hapticEnabled = data.settings.hapticEnabled;
+                _currentData.settings.colorBlindMode = data.settings.colorBlindMode;
+            }
+            
+            _lastSavedSnapshot = data;
+        }
+
+        private function getPrimarySaveFile():File {
+            return File.applicationDirectory.resolvePath(SAVE_FILENAME);
+        }
+        
+        private function getFallbackSaveFile():File {
+            return File.applicationStorageDirectory.resolvePath(SAVE_FILENAME);
+        }
+        
+        private function resolveSaveFileForRead():File {
+            var primary:File = getPrimarySaveFile();
+            var fallback:File = getFallbackSaveFile();
+            
+            if (primary && primary.exists && fallback && fallback.exists) {
+                var primaryDate:Date = primary.modificationDate;
+                var fallbackDate:Date = fallback.modificationDate;
+                if (fallbackDate && primaryDate && fallbackDate.time > primaryDate.time) {
+                    return fallback;
+                }
+                return primary;
+            }
+            if (primary && primary.exists) return primary;
+            if (fallback && fallback.exists) return fallback;
+            
+            return primary;
+        }
+        
+        private function resolveSaveFileForWrite():File {
+            return getPrimarySaveFile();
+        }
+        
+        private function writeToFile(file:File, contents:String):Boolean {
+            if (!file) return false;
+            
+            var stream:FileStream = new FileStream();
+            try {
+                stream.open(file, FileMode.WRITE);
+                stream.writeUTFBytes(contents);
+                stream.close();
+                return true;
+            } catch (e:Error) {
+                try {
+                    stream.close();
+                } catch (closeError:Error) {
+                }
+                trace("[SaveSystem] Error writing save file: " + e.message);
+                return false;
+            }
+            
+            return false;
         }
         
         /**
@@ -246,15 +342,10 @@ package services {
         /**
          * Create backup of current save
          */
-        private function createBackup():void {
-            if (!_sharedObject || !_sharedObject.data.version) return;
+        private function createBackup(snapshot:Object):void {
+            if (!snapshot) return;
             
-            // Clone current data
-            var backup:Object = {};
-            for (var key:String in _sharedObject.data) {
-                backup[key] = _sharedObject.data[key];
-            }
-            
+            var backup:Object = cloneObject(snapshot);
             _backupSaves.push(backup);
             
             // Keep only last N backups
@@ -276,15 +367,17 @@ package services {
                 
                 if (checksum == backup.checksum) {
                     trace("[SaveSystem] Restored from backup " + i);
-                    // Copy backup to current
-                    for (var key:String in backup) {
-                        _sharedObject.data[key] = backup[key];
-                    }
+                    applyDataObject(backup);
                     return true;
                 }
             }
             
             return false;
+        }
+        
+        private function cloneObject(obj:Object):Object {
+            if (!obj) return {};
+            return JSON.parse(JSON.stringify(obj));
         }
         
         /**
@@ -303,53 +396,4 @@ package services {
             return false;
         }
     }
-}
-
-/**
- * SaveData - Data structure for save state
- */
-class SaveData {
-    public var version:String = "1.0.0";
-    public var userId:String;
-    public var createdAt:Number;
-    public var lastPlayedAt:Number;
-    public var currentDifficulty:int = 1;
-    public var currentMode:String = "forward";
-    public var metrics:GameMetrics;
-    public var castleState:Object = {};
-    public var settings:GameSettings;
-    
-    public function SaveData() {
-        userId = generateUserId();
-        createdAt = new Date().time;
-        lastPlayedAt = createdAt;
-        metrics = new GameMetrics();
-        settings = new GameSettings();
-    }
-    
-    private function generateUserId():String {
-        return "user_" + new Date().time.toString(36) + "_" + Math.floor(Math.random() * 10000).toString(36);
-    }
-}
-
-class GameMetrics {
-    public var totalTrials:int = 0;
-    public var correctTrials:int = 0;
-    public var highestStreak:int = 0;
-    public var currentStreak:int = 0;
-    public var totalPlayTime:Number = 0;
-    public var sessionsPlayed:int = 0;
-    public var castleScore:int = 0;
-    public var highestDifficulty:int = 1;
-    public var averageReactionTime:Number = 0;
-    public var bestReactionTime:Number = 0;
-    public var partsBuilt:int = 0;
-    public var partsUpgraded:int = 0;
-}
-
-class GameSettings {
-    public var masterVolume:Number = 1.0;
-    public var sfxVolume:Number = 1.0;
-    public var hapticEnabled:Boolean = true;
-    public var colorBlindMode:String = "none";
 }

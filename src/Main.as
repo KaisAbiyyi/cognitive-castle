@@ -20,14 +20,20 @@ package {
     // Import Game Components
     import config.StimulusConfig;
     import castle.EffectsManager;
+    import castle.CastleState;
     import game.GameController;
+    import game.ProgressionManager;
+    import game.ProgressionResult;
+    import services.AudioManager;
+    import services.SaveSystem;
+    import core.ServiceLocator;
     
     // Import UI Classes (Yang baru diperbarui)
     import ui.MainMenu;
     import ui.SettingsMenu;
     import ui.AboutUsPanel;
     import ui.GameScreen;
-    import ui.TrialPopup;
+    import ui.UpgradePopup;
     import ui.HUD; 
     
     /**
@@ -61,7 +67,7 @@ package {
         
         // Game Screens
         private var _gameScreen:GameScreen;
-        private var _trialPopup:TrialPopup;
+        private var _upgradePopup:UpgradePopup;
         private var _effectsManager:EffectsManager;
         
         // Game State
@@ -252,6 +258,12 @@ package {
         // ==========================================
         
         private function initializeMenu():void {
+            // Initialize AudioManager service
+            var audioManager:AudioManager = new AudioManager();
+            ServiceLocator.getInstance().register("AudioManager", audioManager);
+            
+            if (DEBUG) trace("[Main] AudioManager initialized");
+            
             // 1. Create Main Menu
             _mainMenu = new MainMenu();
             _mainMenu.initialize(stage.stageWidth, stage.stageHeight);
@@ -283,8 +295,19 @@ package {
             // Sembunyikan dan nonaktifkan menu
             _mainMenu.visible = false;
             
-            // Mulai Game
-            initializeGame();
+            // Load save if available, then start game
+            var savedState:CastleState = null;
+            var savedCastleScale:Number = NaN;
+            var saveSystem:SaveSystem = SaveSystem.getInstance();
+            if (saveSystem.loadState() && saveSystem.data && saveSystem.data.castleState) {
+                savedState = CastleState.fromObject(saveSystem.data.castleState);
+                savedCastleScale = saveSystem.data.castleScale;
+                if (DEBUG) trace("[Main] Save loaded - resuming last game");
+            } else if (DEBUG) {
+                trace("[Main] No save found - starting new game");
+            }
+            
+            initializeGame(savedState, savedCastleScale);
         }
         
         private function onSettingsClicked(event:Event):void {
@@ -315,73 +338,146 @@ package {
         // GAME LOGIC
         // ==========================================
 
-        private function initializeGame():void {
+        private function initializeGame(savedState:CastleState = null, savedCastleScale:Number = NaN):void {
             _isInGame = true;
+            
+            var progressionManager:ProgressionManager = ProgressionManager.getInstance();
+            if (savedState) {
+                progressionManager.initializeWithState(savedState);
+            } else {
+                progressionManager.reset();
+            }
             
             // 1. Create Game Screen (Visuals + HUD)
             _gameScreen = new GameScreen();
             _gameScreen.initialize(stage.stageWidth, stage.stageHeight);
+            if (savedState) {
+                _gameScreen.applySavedState(savedState, savedCastleScale);
+            }
             _gameScreen.addEventListener(GameScreen.UPGRADE_CLICKED, onUpgradeClicked);
+            _gameScreen.addEventListener("goToMainMenu", onGoToMainMenu);
+            _gameScreen.addEventListener("retryGame", onRetryGame);
             addChild(_gameScreen);
             
             // 2. Create Popup
-            _trialPopup = new TrialPopup();
-            _trialPopup.initialize(stage.stageWidth, stage.stageHeight);
-            _trialPopup.addEventListener(TrialPopup.TRIAL_SUCCESS, onTrialSuccess);
-            _trialPopup.addEventListener(TrialPopup.TRIAL_FAIL, onTrialFail);
-            _trialPopup.addEventListener(TrialPopup.TRIAL_CLOSED, onTrialClosed);
-            addChild(_trialPopup);
+            _upgradePopup = new UpgradePopup();
+            _upgradePopup.initialize(stage.stageWidth, stage.stageHeight);
+            _upgradePopup.addEventListener(UpgradePopup.CHALLENGE_STARTED, onChallengeStarted);
+            _upgradePopup.addEventListener(UpgradePopup.CHALLENGE_SUCCESS, onChallengeSuccess);
+            _upgradePopup.addEventListener(UpgradePopup.CHALLENGE_FAIL, onChallengeFail);
+            _upgradePopup.addEventListener(UpgradePopup.POPUP_CLOSED, onPopupClosed);
+            addChild(_upgradePopup);
             
             // 3. Setup Effects
             _effectsManager = EffectsManager.getInstance();
             _effectsManager.setParent(this);
             
-            // 4. Start Game Controller
-            if (_gameScreen.hud) {
-                var gameCtrl:GameController = GameController.getInstance();
-                gameCtrl.initialize(_gameScreen.hud);
-                gameCtrl.startNextTrial();
-                if (DEBUG) trace("[Main] GameController initialized & First Trial Started");
-            } else {
-                trace("[Main] ERROR: HUD property not found in GameScreen!");
+            if (DEBUG) {
+                trace("[Main] Game initialized");
             }
         }
         
         private function onUpgradeClicked(event:Event):void {
+            if (DEBUG) trace("[Main] Upgrade clicked - showing upgrade popup");
             _gameScreen.setUpgradeButtonEnabled(false);
-            _trialPopup.show();
-        }
-        
-        private function onTrialSuccess(event:Event):void {
-            _correctStreak++;
-            _wrongStreak = 0;
-            _gameScreen.showUpgradeAlert("Castle Upgraded!");
-        }
-        
-        private function onTrialFail(event:Event):void {
-            _wrongStreak++;
-            _correctStreak = 0;
-        }
-        
-        private function onTrialClosed(event:Event):void {
-            var center:Object = _gameScreen.getCastleCenter();
-            var wasSuccess:Boolean = _trialPopup.getLastTrialResult();
             
-            if (wasSuccess) {
-                _gameScreen.processUpgrade(_correctStreak);
-                _effectsManager.playCorrectEffect(center.x, center.y, _correctStreak * 10);
-            } else {
-                if (_wrongStreak >= 3 && _gameScreen.hasSideTowers()) {
-                    _gameScreen.removeSideTower();
-                    _wrongStreak = 0;
-                } else {
-                    _gameScreen.processWrong();
-                }
-                _effectsManager.playWrongEffect(center.x, center.y);
+            // Bring popup to front so it's visible above everything
+            if (_upgradePopup && contains(_upgradePopup)) {
+                setChildIndex(_upgradePopup, numChildren - 1);
             }
             
-            _gameScreen.hideUpgradeAlert();
+            _upgradePopup.show();
+        }
+        
+        private function onChallengeSuccess(event:Event):void {
+            _correctStreak++;
+            _wrongStreak = 0;
+            if (_gameScreen) _gameScreen.resetHordeTimer();
+        }
+        
+        private function onChallengeFail(event:Event):void {
+            _wrongStreak++;
+            _correctStreak = 0;
+            if (_gameScreen) _gameScreen.resetHordeTimer();
+        }
+        
+        private function onChallengeStarted(event:Event):void {
+            if (_gameScreen) _gameScreen.resetHordeTimer();
+        }
+        
+        private function onPopupClosed(event:Event):void {
+            var center:Object = _gameScreen.getCastleCenter();
+            var progressionResult:ProgressionResult = _upgradePopup.getLastProgressionResult();
+            
+            if (progressionResult) {
+                // Always process the result (handles both correct and wrong)
+                _gameScreen.processUpgradeResult(progressionResult);
+                
+                if (progressionResult.wasCorrect) {
+                    _effectsManager.playCorrectEffect(center.x, center.y, _correctStreak * 10);
+                } else {
+                    _effectsManager.playWrongEffect(center.x, center.y);
+                    
+                    if (DEBUG) {
+                        trace("[Main] Wrong answer - wrongStreak=" + progressionResult.wrongStreak + 
+                              ", type=" + progressionResult.upgradeType);
+                    }
+                }
+            }
+            
             _gameScreen.setUpgradeButtonEnabled(true);
+        }
+        
+        private function onGoToMainMenu(event:Event):void {
+            if (DEBUG) trace("[Main] Returning to main menu");
+            
+            // Clean up game
+            cleanupGame();
+            
+            // Show main menu
+            _mainMenu.visible = true;
+        }
+        
+        private function onRetryGame(event:Event):void {
+            if (DEBUG) trace("[Main] Retrying game");
+            
+            // Clean up current game
+            cleanupGame();
+            
+            // Start fresh game
+            initializeGame();
+        }
+        
+        private function cleanupGame():void {
+            _isInGame = false;
+            
+            var audioManager:AudioManager = ServiceLocator.get("AudioManager") as AudioManager;
+            if (audioManager) {
+                audioManager.stopBgm();
+            }
+
+            // Remove game screen
+            if (_gameScreen) {
+                _gameScreen.removeEventListener(GameScreen.UPGRADE_CLICKED, onUpgradeClicked);
+                _gameScreen.removeEventListener("goToMainMenu", onGoToMainMenu);
+                _gameScreen.removeEventListener("retryGame", onRetryGame);
+                if (contains(_gameScreen)) removeChild(_gameScreen);
+                _gameScreen = null;
+            }
+            
+            // Remove upgrade popup
+            if (_upgradePopup) {
+                _upgradePopup.removeEventListener(UpgradePopup.CHALLENGE_STARTED, onChallengeStarted);
+                _upgradePopup.removeEventListener(UpgradePopup.CHALLENGE_SUCCESS, onChallengeSuccess);
+                _upgradePopup.removeEventListener(UpgradePopup.CHALLENGE_FAIL, onChallengeFail);
+                _upgradePopup.removeEventListener(UpgradePopup.POPUP_CLOSED, onPopupClosed);
+                if (contains(_upgradePopup)) removeChild(_upgradePopup);
+                _upgradePopup = null;
+            }
+            
+            // Reset streaks
+            _correctStreak = 0;
+            _wrongStreak = 0;
         }
 
         private function onStageResize(event:Event):void {
@@ -397,7 +493,7 @@ package {
             // Update Game components if in game
             if (_isInGame) {
                 if (_gameScreen) _gameScreen.onResize(stage.stageWidth, stage.stageHeight);
-                if (_trialPopup) _trialPopup.resize(stage.stageWidth, stage.stageHeight);
+                if (_upgradePopup) _upgradePopup.onResize(stage.stageWidth, stage.stageHeight);
             }
         }
     }

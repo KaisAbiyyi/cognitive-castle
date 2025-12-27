@@ -25,3 +25,7 @@ Thumbs.db
 .history/# Video files (too large for GitHub)
 assets/*.mp4
 bin/assets/*.mp4
+
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.github/instructions/snyk_rules.instructions.md

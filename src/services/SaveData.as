@@ -15,6 +15,7 @@ package services {
         public var currentMode:String = "forward";
         public var metrics:GameMetrics;
         public var castleState:Object = {};
+        public var castleScale:Number = 1.0;
         public var settings:GameSettings;
         
         public function SaveData() {

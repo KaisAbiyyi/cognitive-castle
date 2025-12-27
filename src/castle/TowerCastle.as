@@ -304,6 +304,12 @@ package castle {
                 trace("[TowerCastle] Processing upgrade for streak " + streak);
             }
             
+            // Scale entire castle slightly bigger with each upgrade
+            var newScale:Number = 1.0 + (streak * 0.03); // Increase 3% per streak
+            newScale = Math.min(newScale, 1.5); // Max 150% scale
+            this.scaleX = newScale;
+            this.scaleY = newScale;
+            
             // Start correct answer animation
             startCorrectAnimation();
             
