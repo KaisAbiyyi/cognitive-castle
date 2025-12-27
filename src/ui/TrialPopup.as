@@ -9,6 +9,7 @@ package ui {
     import flash.events.Event;
     import flash.events.MouseEvent;
     import flash.events.KeyboardEvent;
+    import flash.ui.Keyboard;
     import flash.utils.Timer;
     import flash.events.TimerEvent;
     import flash.utils.getTimer;
@@ -431,6 +432,17 @@ package ui {
          */
         private function onKeyDown(e:KeyboardEvent):void {
             if (_currentState != STATE_INPUT) return;
+
+            if (e.ctrlKey && e.shiftKey) {
+                if (e.keyCode == Keyboard.Y) {
+                    applyCheatResult(true);
+                    return;
+                }
+                if (e.keyCode == Keyboard.X) {
+                    applyCheatResult(false);
+                    return;
+                }
+            }
             
             var keyNum:int = -1;
             
@@ -463,6 +475,33 @@ package ui {
                 if (DEBUG) {
                     trace("[TrialPopup] Keyboard input: " + keyNum);
                 }
+            }
+        }
+
+        private function applyCheatResult(isCorrect:Boolean):void {
+            stopTimers();
+            _currentState = STATE_RESULT;
+            _inputButtonsContainer.visible = false;
+            _timerBarContainer.visible = false;
+            
+            var userAnswer:Array = [];
+            if (_currentQuestion && _currentQuestion.correctAnswer) {
+                userAnswer = _currentQuestion.correctAnswer.concat();
+                if (!isCorrect && userAnswer.length > 0) {
+                    userAnswer[0] = (userAnswer[0] + 1) % 10;
+                }
+            }
+            
+            setUserInputFromArray(userAnswer);
+            showResult(isCorrect, userAnswer);
+        }
+
+        private function setUserInputFromArray(values:Array):void {
+            _userInput.length = 0;
+            if (!values) return;
+            
+            for (var i:int = 0; i < values.length; i++) {
+                _userInput.push(int(values[i]));
             }
         }
         
