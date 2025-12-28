@@ -7,6 +7,7 @@ package services {
     import flash.events.Event;
     import flash.events.IOErrorEvent;
     import flash.utils.Dictionary;
+    import flash.filesystem.File;
     
     /**
      * AudioManager - Centralized audio management service.
@@ -28,6 +29,7 @@ package services {
         
         // Debug mode
         private static const DEBUG:Boolean = true;
+        private static var _instance:AudioManager;
         
         // Volume constants
         private static const DEFAULT_SFX_VOLUME:Number = 0.30; // 30%
@@ -39,8 +41,13 @@ package services {
         private static const AUDIO_BASE_PATHS:Array = [
             "assets/audios/",
             "../assets/audios/",
-            "../../assets/audios/"
+            "../../assets/audios/",
+            "assets/Audio/",
+            "../assets/Audio/",
+            "../../assets/Audio/"
         ];
+        private static const AUDIO_EXTENSIONS:Array = ["mp3", "wav", "mpeg"];
+        private static const SOUND_NAME_ALIASES:Object = { bgmLobby: ["Bgmlobby"] };
         
         // Sound cache to prevent reloading
         private var _soundCache:Dictionary;
@@ -77,6 +84,16 @@ package services {
             if (DEBUG) {
                 trace("[AudioManager] Initialized with SFX=" + (_sfxVolume * 100) + "%, BGM=" + (_bgmVolume * 100) + "%");
             }
+        }
+
+        /**
+         * Get singleton instance (legacy compatibility)
+         */
+        public static function getInstance():AudioManager {
+            if (!_instance) {
+                _instance = new AudioManager();
+            }
+            return _instance;
         }
         
         /**
@@ -124,6 +141,9 @@ package services {
             } catch (error:Error) {
                 if (DEBUG) {
                     trace("[AudioManager] ERROR playing SFX '" + soundName + "': " + error.message);
+                }
+                if (isButtonSfx(soundName)) {
+                    return tryPlayButtonFallback(soundName, volumeMultiplier);
                 }
                 return false;
             }
@@ -392,6 +412,69 @@ package services {
             
             if (DEBUG) trace("[AudioManager] Disposed");
         }
+
+        // ========== LEGACY COMPATIBILITY ==========
+
+        public function init():void {
+            setMasterLevel(10);
+        }
+
+        public function play(name:String, startTime:Number = 0, loops:int = 0):SoundChannel {
+            if (!name || name.length == 0) return null;
+            
+            if (name == "Bgmlobby") {
+                playBgm(mapLegacyName(name));
+                return _bgmChannel;
+            }
+            
+            var mapped:String = mapLegacyName(name);
+            if (mapped == "bgmGame" || mapped == "bgmLobby") {
+                playBgm(mapped);
+                return _bgmChannel;
+            }
+            
+            if (_sfxMuted) return null;
+            var sound:Sound = loadSound(mapped);
+            if (!sound) return null;
+            
+            var transform:SoundTransform = new SoundTransform(_sfxVolume);
+            var channel:SoundChannel = null;
+            try {
+                channel = sound.play(startTime, loops, transform);
+            } catch (error:Error) {
+                if (DEBUG) {
+                    trace("[AudioManager] ERROR playing legacy SFX '" + mapped + "': " + error.message);
+                }
+                return null;
+            }
+            if (channel) {
+                _activeSfxChannels.push(channel);
+                channel.addEventListener(Event.SOUND_COMPLETE, onSfxComplete);
+            }
+            return channel;
+        }
+
+        public function playMusic(name:String):void {
+            playBgm(mapLegacyName(name));
+        }
+
+        public function stopMusic():void {
+            stopBgm();
+        }
+
+        public function setMasterLevel(level:int):void {
+            var volume:Number = Math.max(0, Math.min(10, level)) / 10;
+            setSfxVolume(volume);
+            setBgmVolume(volume);
+        }
+
+        public function setMusicVolume(volume:Number):void {
+            setBgmVolume(volume);
+        }
+
+        public function getMusicVolume():Number {
+            return _bgmVolume;
+        }
         
         // ========== GETTERS ==========
         
@@ -403,6 +486,19 @@ package services {
         public function get isPlayingRepeatingSfx():Boolean { return _repeatingSfxChannel != null; }
         
         // ========== PRIVATE METHODS ==========
+
+        private function mapLegacyName(name:String):String {
+            switch (name) {
+                case "Bgmlobby":
+                    return "bgmLobby";
+                case "ButtonIn":
+                    return "ButtonIn";
+                case "ButtonOut":
+                    return "ButtonOut";
+                default:
+                    return name;
+            }
+        }
         
         /**
          * Load and cache a sound file
@@ -415,15 +511,17 @@ package services {
             
             // Load new sound
             var sound:Sound = new Sound();
-            var candidateIndex:int = 0;
             var attemptedPaths:Array = [];
+            var candidatePaths:Array = buildCandidatePaths(soundName);
+            var initialCandidateIndex:int = findExistingCandidateIndex(candidatePaths);
+            var candidateIndex:int = Math.max(0, initialCandidateIndex);
 
             // Try multiple relative base paths so packaged builds can find assets regardless of copy location
             var ioErrorHandler:Function = null;
             ioErrorHandler = function(e:IOErrorEvent):void {
                 candidateIndex++;
-                if (candidateIndex < AUDIO_BASE_PATHS.length) {
-                    var fallbackPath:String = AUDIO_BASE_PATHS[candidateIndex] + soundName + ".mp3";
+                if (candidateIndex < candidatePaths.length) {
+                    var fallbackPath:String = resolveSoundPath(candidatePaths[candidateIndex]);
                     attemptedPaths.push(fallbackPath);
                     try {
                         sound.load(new URLRequest(fallbackPath));
@@ -441,7 +539,9 @@ package services {
             };
 
             try {
-                var initialPath:String = AUDIO_BASE_PATHS[0] + soundName + ".mp3";
+                var initialPath:String = candidatePaths.length > 0
+                    ? resolveSoundPath(candidatePaths[Math.max(0, initialCandidateIndex)])
+                    : (AUDIO_BASE_PATHS[0] + soundName + ".mp3");
                 attemptedPaths.push(initialPath);
                 sound.addEventListener(IOErrorEvent.IO_ERROR, ioErrorHandler);
                 sound.load(new URLRequest(initialPath));
@@ -460,6 +560,140 @@ package services {
                 return null;
             }
             // Should never reach here, but compiler wants explicit return
+            return null;
+        }
+
+        private function buildCandidatePaths(soundName:String, extensionsOverride:Array = null):Array {
+            var candidates:Array = [];
+            var nameCandidates:Array = getSoundNameCandidates(soundName);
+            var extensions:Array = extensionsOverride ? extensionsOverride : AUDIO_EXTENSIONS;
+
+            for each (var basePath:String in AUDIO_BASE_PATHS) {
+                for each (var nameCandidate:String in nameCandidates) {
+                    for each (var ext:String in extensions) {
+                        candidates.push(basePath + nameCandidate + "." + ext);
+                    }
+                }
+            }
+
+            return candidates;
+        }
+
+        private function getSoundNameCandidates(soundName:String):Array {
+            var candidates:Array = [soundName];
+            if (SOUND_NAME_ALIASES.hasOwnProperty(soundName)) {
+                var aliases:Array = SOUND_NAME_ALIASES[soundName];
+                for each (var alias:String in aliases) {
+                    if (candidates.indexOf(alias) < 0) candidates.push(alias);
+                }
+            }
+            return candidates;
+        }
+
+        private function isButtonSfx(soundName:String):Boolean {
+            return soundName == "ButtonIn" || soundName == "ButtonOut";
+        }
+
+        private function tryPlayButtonFallback(soundName:String, volumeMultiplier:Number):Boolean {
+            delete _soundCache[soundName];
+            var fallback:Sound = loadSoundWithExtensions(soundName, ["mpeg", "mp3"]);
+            if (!fallback) {
+                return false;
+            }
+
+            try {
+                var finalVolume:Number = _sfxVolume * volumeMultiplier;
+                var transform:SoundTransform = new SoundTransform(finalVolume);
+                var channel:SoundChannel = fallback.play(0, 0, transform);
+                if (channel) {
+                    _activeSfxChannels.push(channel);
+                    channel.addEventListener(Event.SOUND_COMPLETE, onSfxComplete);
+                    _soundCache[soundName] = fallback;
+                    return true;
+                }
+            } catch (error:Error) {
+                if (DEBUG) {
+                    trace("[AudioManager] ERROR playing fallback SFX '" + soundName + "': " + error.message);
+                }
+            }
+            return false;
+        }
+
+        private function findExistingCandidateIndex(candidatePaths:Array):int {
+            try {
+                for (var i:int = 0; i < candidatePaths.length; i++) {
+                    var file:File = File.applicationDirectory.resolvePath(candidatePaths[i]);
+                    if (file.exists) {
+                        return i;
+                    }
+                }
+            } catch (error:Error) {
+                // Ignore file resolution errors and fallback to first candidate.
+            }
+            return -1;
+        }
+
+        private function resolveSoundPath(candidatePath:String):String {
+            try {
+                var file:File = File.applicationDirectory.resolvePath(candidatePath);
+                if (file.exists) {
+                    return file.url;
+                }
+            } catch (error:Error) {
+                // Ignore and fallback to provided path.
+            }
+            return candidatePath;
+        }
+
+        private function loadSoundWithExtensions(soundName:String, extensions:Array):Sound {
+            var sound:Sound = new Sound();
+            var attemptedPaths:Array = [];
+            var candidatePaths:Array = buildCandidatePaths(soundName, extensions);
+            var initialCandidateIndex:int = findExistingCandidateIndex(candidatePaths);
+            if (candidatePaths.length == 0) {
+                if (DEBUG) {
+                    trace("[AudioManager] ERROR loading sound '" + soundName + "'. No matching files found.");
+                }
+                return null;
+            }
+            if (initialCandidateIndex < 0) initialCandidateIndex = 0;
+            var candidateIndex:int = initialCandidateIndex;
+
+            var ioErrorHandler:Function = null;
+            ioErrorHandler = function(e:IOErrorEvent):void {
+                candidateIndex++;
+                if (candidateIndex < candidatePaths.length) {
+                    var fallbackPath:String = resolveSoundPath(candidatePaths[candidateIndex]);
+                    attemptedPaths.push(fallbackPath);
+                    try {
+                        sound.load(new URLRequest(fallbackPath));
+                    } catch (retryError:Error) {
+                        if (DEBUG) {
+                            trace("[AudioManager] ERROR retrying load for '" + soundName + "' at " + fallbackPath + ": " + retryError.message);
+                        }
+                    }
+                } else {
+                    sound.removeEventListener(IOErrorEvent.IO_ERROR, ioErrorHandler);
+                    if (DEBUG) {
+                        trace("[AudioManager] ERROR loading sound '" + soundName + "'. Attempts: " + attemptedPaths.join(", ") + " | " + e.text);
+                    }
+                }
+            };
+
+            try {
+                var initialPath:String = resolveSoundPath(candidatePaths[initialCandidateIndex]);
+                attemptedPaths.push(initialPath);
+                sound.addEventListener(IOErrorEvent.IO_ERROR, ioErrorHandler);
+                sound.load(new URLRequest(initialPath));
+                _soundCache[soundName] = sound;
+                return sound;
+            } catch (error:Error) {
+                sound.removeEventListener(IOErrorEvent.IO_ERROR, ioErrorHandler);
+                if (DEBUG) {
+                    trace("[AudioManager] ERROR creating sound for '" + soundName + "': " + error.message);
+                }
+                return null;
+            }
             return null;
         }
         
@@ -547,87 +781,6 @@ package services {
                     _repeatingSfxName = null;
                 }
             }
-        }
-    }
-}
-    import flash.media.Sound;
-    import flash.net.URLRequest;
-    import flash.media.SoundChannel;
-    import flash.media.SoundTransform;
-    import flash.media.SoundMixer;
-    import flash.events.EventDispatcher;
-    import flash.events.Event;
-    import flash.events.IOErrorEvent;
-
-    public class AudioManager extends EventDispatcher {
-        private static var _instance:AudioManager;
-        public var masterVolume:Number = 1.0;
-        
-        private var _sounds:Object = {};
-        private var _musicChannel:SoundChannel;
-        private var _currentMusicName:String = "";
-
-        public static function getInstance():AudioManager {
-            return _instance ||= new AudioManager();
-        }
-
-        public function init():void {
-            loadSound("ButtonIn", "assets/Audio/ButtonIn.mpeg");
-            loadSound("ButtonOut", "assets/Audio/ButtonOut.mpeg");
-            loadSound("Bgmlobby", "assets/Audio/Bgmlobby.mp3");
-            setMasterLevel(10);
-        }
-
-        public function loadSound(name:String, url:String):void {
-            var s:Sound = new Sound();
-            s.addEventListener(Event.COMPLETE, function(e:Event):void { dispatchEvent(new Event("soundLoaded")); });
-            s.addEventListener(IOErrorEvent.IO_ERROR, function(e:IOErrorEvent):void { trace("[Audio] Gagal: " + name); });
-            try { s.load(new URLRequest(url)); _sounds[name] = s; } 
-            catch(e:Error) { trace("[Audio] Error: " + e.message); }
-        }
-
-        public function isSoundLoaded(name:String):Boolean { return _sounds[name] != null; }
-
-        public function play(name:String, startTime:Number = 0, loops:int = 0):SoundChannel {
-            if (name == "Bgmlobby") { playMusic(name); return _musicChannel; }
-            var s:Sound = _sounds[name] as Sound;
-            return (s) ? s.play(startTime, loops, new SoundTransform(masterVolume)) : null;
-        }
-
-        public function playMusic(name:String):void {
-            if (_currentMusicName == name && _musicChannel) return; // Sudah main
-            stopMusic();
-            
-            var s:Sound = _sounds[name] as Sound;
-            if (s) {
-                _musicChannel = s.play(0, 9999, new SoundTransform(masterVolume));
-                _currentMusicName = name;
-            }
-        }
-
-        public function stopMusic():void {
-            if (_musicChannel) { _musicChannel.stop(); _musicChannel = null; }
-            _currentMusicName = "";
-        }
-
-        public function setMusicVolume(volume:Number):void {
-            if (_musicChannel) _musicChannel.soundTransform = new SoundTransform(Math.max(0, Math.min(1, volume)));
-        }
-
-        public function getMusicVolume():Number {
-            return (_musicChannel) ? _musicChannel.soundTransform.volume : masterVolume;
-        }
-
-        public function stopAll():void {
-            SoundMixer.stopAll();
-            _musicChannel = null; 
-            _currentMusicName = "";
-        }
-
-        public function setMasterLevel(level:int):void {
-            masterVolume = Math.max(0, Math.min(10, level)) / 10.0;
-            SoundMixer.soundTransform = new SoundTransform(masterVolume);
-            if (_musicChannel) _musicChannel.soundTransform = new SoundTransform(masterVolume);
         }
     }
 }
