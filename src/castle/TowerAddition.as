@@ -601,6 +601,12 @@ package castle {
         public function get currentScale():Number { return _currentScale; }
         public function get maxScale():Number { return _maxScale; }
         public function get isLoaded():Boolean { return _isLoaded; }
+        
+        /**
+         * Threshold below which this tower is considered destroyed by siege.
+         * We make it relative to initial scale with a safe minimum to avoid tiny, invisible towers.
+         */
+        public function get destroyThreshold():Number { return Math.max(0.15, _initialScale * 0.6); }
         public function get baseY():Number { return _baseY; }
         public function get isAnimating():Boolean { return _isAnimating; }
         

@@ -129,7 +129,7 @@ package input {
             _stageRef = stage;
             
             // Setup keyboard listeners
-            stage.addEventListener(KeyboardEvent.KEY_DOWN, onKeyDown);
+            stage.addEventListener(KeyboardEvent.KEY_DOWN, handleKeyboardDown);
             
             // Create input buttons
             createInputButtons(_currentLayout);
@@ -264,7 +264,7 @@ package input {
         /**
          * Handle keyboard input
          */
-        private function onKeyDown(event:KeyboardEvent):void {
+        private function handleKeyboardDown(event:KeyboardEvent):void {
             if (!_isInputEnabled) return;
             
             var action:InputAction = null;

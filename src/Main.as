@@ -55,6 +55,23 @@ package {
         private var _skipBaseX:Number = 0;
         private var _skipBaseY:Number = 0;
         private var _videoStartTime:Number = 0;
+        private var _currentVideoPath:String;
+        private var _currentVideoCallback:Function;
+        private var _videoCompleted:Boolean = false;
+        private var _skipDelayMs:int = 2000;
+        private const PRELOAD_ASSETS:Array = [
+            "assets/images/Game/background.png",
+            "assets/images/Game/horde.png",
+            "assets/images/Game/cloud1.png",
+            "assets/images/Game/cloud2.png",
+            "assets/images/Game/cloud3.png"
+        ];
+        private var _gateAssetsReady:Boolean = false;
+        private var _gateVideoDone:Boolean = false;
+        private var _pendingSavedState:CastleState;
+        private var _pendingSavedCastleScale:Number = NaN;
+        private var _preloadIndex:int = 0;
+        private var _currentPreloadLoader:Loader;
         
         // UI
         private var _mainMenu:MainMenu;
@@ -85,38 +102,10 @@ package {
         
         // --- Video Logic ---
         private function playIntro():void {
-            _netConnection = new NetConnection();
-            _netConnection.connect(null);
-            
-            _netStream = new NetStream(_netConnection);
-            _netStream.client = { onMetaData: function(o:Object):void{} };
-            _netStream.addEventListener(NetStatusEvent.NET_STATUS, onIntroStatus);
-            
-            _video = new Video(1280, 720);
-            _video.attachNetStream(_netStream);
-            _video.smoothing = true;
-            
-            _videoContainer = new Sprite();
-            _videoContainer.addChild(_video);
-            addChild(_videoContainer);
-            
-            layoutIntroVideo();
-            
-            var f:File = File.applicationDirectory.resolvePath("assets/videoOpening.mp4");
-            if (f.exists) {
-                _netStream.play(f.url);
-                _videoStartTime = getTimer();
-                addEventListener(Event.ENTER_FRAME, checkSkip);
-            } else {
-                endIntro();
-            }
+            startVideoPlayback("assets/videoOpening.mp4", onIntroComplete, 2000);
         }
         
-        private function onIntroStatus(e:NetStatusEvent):void {
-            if (e.info && e.info.code == "NetStream.Play.Stop") {
-                endIntro();
-            }
-        }
+        private function onIntroComplete():void { initializeMenu(); }
         
         private function layoutIntroVideo():void {
             if (!_video) return;
@@ -128,8 +117,7 @@ package {
         }
         
         private function checkSkip(e:Event):void {
-            // Tampilkan tombol skip setelah 2 detik
-            if (getTimer() - _videoStartTime > 2000) {
+            if (getTimer() - _videoStartTime > _skipDelayMs) {
                 removeEventListener(Event.ENTER_FRAME, checkSkip);
                 createSkipButton();
             }
@@ -144,7 +132,7 @@ package {
             _skipBaseY = stage.stageHeight - (_skipBtnHeight + 20);
             applySkipScale(_skipNormalScale);
             
-            _skipBtn.addEventListener(MouseEvent.CLICK, function(e:Event):void { endIntro(); });
+            _skipBtn.addEventListener(MouseEvent.CLICK, function(e:Event):void { finishVideoPlayback(); });
             _skipBtn.addEventListener(MouseEvent.MOUSE_OVER, onSkipOver);
             _skipBtn.addEventListener(MouseEvent.MOUSE_OUT, onSkipOut);
             addChild(_skipBtn);
@@ -191,30 +179,120 @@ package {
             applySkipScale(_skipNormalScale);
         }
         
-        private function endIntro():void {
+        private function startVideoPlayback(path:String, onComplete:Function, skipDelayMs:int = 2000):void {
+            _currentVideoPath = path;
+            _currentVideoCallback = onComplete;
+            _skipDelayMs = skipDelayMs;
+            _videoCompleted = false;
+            cleanupVideoVisuals();
+            
+            _netConnection = new NetConnection();
+            _netConnection.connect(null);
+            _netStream = new NetStream(_netConnection);
+            _netStream.client = { onMetaData: function(o:Object):void{} };
+            _netStream.addEventListener(NetStatusEvent.NET_STATUS, onVideoStatus);
+            
+            _video = new Video(1280, 720);
+            _video.attachNetStream(_netStream);
+            _video.smoothing = true;
+            
+            _videoContainer = new Sprite();
+            _videoContainer.addChild(_video);
+            addChild(_videoContainer);
+            layoutIntroVideo();
+            
+            var f:File = File.applicationDirectory.resolvePath(path);
+            if (f.exists) {
+                _netStream.play(f.url);
+                _videoStartTime = getTimer();
+                addEventListener(Event.ENTER_FRAME, checkSkip);
+            } else {
+                finishVideoPlayback();
+            }
+        }
+
+        private function onVideoStatus(e:NetStatusEvent):void {
+            if (e.info && e.info.code == "NetStream.Play.Stop") {
+                finishVideoPlayback();
+            }
+        }
+
+        private function finishVideoPlayback():void {
+            if (_videoCompleted) return;
+            _videoCompleted = true;
+            removeEventListener(Event.ENTER_FRAME, checkSkip);
             if (_netStream) {
-                _netStream.removeEventListener(NetStatusEvent.NET_STATUS, onIntroStatus);
+                _netStream.removeEventListener(NetStatusEvent.NET_STATUS, onVideoStatus);
                 _netStream.close();
                 _netStream = null;
             }
-            if (_netConnection) {
-                _netConnection.close();
-                _netConnection = null;
-            }
-            if (_videoContainer && contains(_videoContainer)) {
-                removeChild(_videoContainer);
-            }
+            if (_netConnection) { _netConnection.close(); _netConnection = null; }
+            cleanupVideoVisuals();
+            var cb:Function = _currentVideoCallback;
+            _currentVideoCallback = null;
+            if (cb != null) cb();
+        }
+
+        private function cleanupVideoVisuals():void {
+            if (_videoContainer && contains(_videoContainer)) removeChild(_videoContainer);
             _videoContainer = null;
             _video = null;
-            
             if (_skipBtn) {
                 _skipBtn.removeEventListener(MouseEvent.MOUSE_OVER, onSkipOver);
                 _skipBtn.removeEventListener(MouseEvent.MOUSE_OUT, onSkipOut);
                 if (contains(_skipBtn)) removeChild(_skipBtn);
-                _skipBtn = null;
             }
-            
-            initializeMenu();
+            _skipBtn = null;
+        }
+
+        // --- Play gate video + preload assets ---
+        private function startPreGameGate(savedState:CastleState, savedCastleScale:Number):void {
+            _pendingSavedState = savedState;
+            _pendingSavedCastleScale = savedCastleScale;
+            _gateAssetsReady = false;
+            _gateVideoDone = false;
+            beginAssetPreload();
+            startVideoPlayback("assets/videoKedua.mp4", onGateVideoComplete, 1500);
+        }
+
+        private function onGateVideoComplete():void {
+            _gateVideoDone = true;
+            maybeStartGameAfterGate();
+        }
+
+        private function beginAssetPreload():void {
+            _preloadIndex = 0;
+            loadNextAsset();
+        }
+
+        private function loadNextAsset():void {
+            if (_preloadIndex >= PRELOAD_ASSETS.length) { onAssetsPreloaded(); return; }
+            var path:String = PRELOAD_ASSETS[_preloadIndex++];
+            _currentPreloadLoader = new Loader();
+            _currentPreloadLoader.contentLoaderInfo.addEventListener(Event.COMPLETE, onAssetLoadComplete);
+            _currentPreloadLoader.contentLoaderInfo.addEventListener(IOErrorEvent.IO_ERROR, onAssetLoadComplete);
+            try { _currentPreloadLoader.load(new URLRequest(path)); } catch (err:Error) { onAssetLoadComplete(null); }
+        }
+
+        private function onAssetLoadComplete(e:Event):void {
+            if (_currentPreloadLoader) {
+                _currentPreloadLoader.contentLoaderInfo.removeEventListener(Event.COMPLETE, onAssetLoadComplete);
+                _currentPreloadLoader.contentLoaderInfo.removeEventListener(IOErrorEvent.IO_ERROR, onAssetLoadComplete);
+            }
+            _currentPreloadLoader = null;
+            loadNextAsset();
+        }
+
+        private function onAssetsPreloaded():void {
+            _gateAssetsReady = true;
+            maybeStartGameAfterGate();
+        }
+
+        private function maybeStartGameAfterGate():void {
+            if (!_gateAssetsReady || !_gateVideoDone) return;
+            initializeGame(_pendingSavedState, _pendingSavedCastleScale);
+            _pendingSavedState = null;
+            _pendingSavedCastleScale = NaN;
         }
         
         // ==========================================
@@ -283,8 +361,8 @@ package {
             } else if (DEBUG) {
                 trace("[Main] No save found - starting new game");
             }
-            
-            initializeGame(savedState, savedCastleScale);
+
+            startPreGameGate(savedState, savedCastleScale);
         }
         
         private function onSettingsClicked(event:Event):void {
