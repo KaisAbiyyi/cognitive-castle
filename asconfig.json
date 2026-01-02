@@ -2,7 +2,8 @@
     "config": "airmobile",
     "compilerOptions": {
         "source-path": [
-            "src"
+            "src",
+            "C:/projects/cognitive-castle/src"
         ],
         "output": "bin/CognitiveCastle.swf"
     },

@@ -829,7 +829,7 @@ package ui {
         /**
          * Handle keyboard input
          */
-        private function onKeyDown(e:KeyboardEvent):void {
+        private function handleKeyboardDown(e:KeyboardEvent):void {
             if (_currentState != STATE_INPUT) return;
             
             var keyCode:int = e.keyCode;
@@ -903,7 +903,7 @@ package ui {
          */
         private function addKeyboardListener():void {
             if (stage && !_keyboardListenerAdded) {
-                stage.addEventListener(KeyboardEvent.KEY_DOWN, onKeyDown);
+                stage.addEventListener(KeyboardEvent.KEY_DOWN, handleKeyboardDown);
                 _keyboardListenerAdded = true;
             }
         }
@@ -913,7 +913,7 @@ package ui {
          */
         private function removeKeyboardListener():void {
             if (stage && _keyboardListenerAdded) {
-                stage.removeEventListener(KeyboardEvent.KEY_DOWN, onKeyDown);
+                stage.removeEventListener(KeyboardEvent.KEY_DOWN, handleKeyboardDown);
                 _keyboardListenerAdded = false;
             }
         }

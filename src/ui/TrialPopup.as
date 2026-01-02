@@ -406,7 +406,7 @@ package ui {
             
             // Add keyboard listener
             if (stage) {
-                stage.addEventListener(KeyboardEvent.KEY_DOWN, onKeyDown);
+                stage.addEventListener(KeyboardEvent.KEY_DOWN, handleKeyboardDown);
             }
             
             startTrial();
@@ -421,7 +421,7 @@ package ui {
             
             // Remove keyboard listener
             if (stage) {
-                stage.removeEventListener(KeyboardEvent.KEY_DOWN, onKeyDown);
+                stage.removeEventListener(KeyboardEvent.KEY_DOWN, handleKeyboardDown);
             }
             
             dispatchEvent(new Event(TRIAL_CLOSED));
@@ -430,7 +430,7 @@ package ui {
         /**
          * Handle keyboard input - supports 0-9 keys
          */
-        private function onKeyDown(e:KeyboardEvent):void {
+        private function handleKeyboardDown(e:KeyboardEvent):void {
             if (_currentState != STATE_INPUT) return;
 
             if (e.ctrlKey && e.shiftKey) {
