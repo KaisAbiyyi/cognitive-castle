@@ -6,6 +6,7 @@ bin/*apk
 bin/*.exe
 bin/*.tmp
 bin/*.air
+bin/signed*
 bin-debug/
 bin-release/
 docs/
