@@ -7,6 +7,7 @@ package ui {
     import flash.filesystem.File;
     import flash.text.TextField;
     import services.AudioManager;
+    import services.SaveSystem;
     import ui.components.VideoControls;
 
     public class LessonsPanel extends MovieClip {
@@ -26,8 +27,6 @@ package ui {
         private var _backNormalScale:Number = 1.0;
         private var _backBaseX:Number = 0;
         private var _backBaseY:Number = 0;
-        private var _fadeTimer:Timer;
-        private var _prevBgVolume:Number = 1.0;
         
         // Video Controls
         private var _videoControls:VideoControls;
@@ -61,27 +60,27 @@ package ui {
         public function hide():void { visible = false; stopVideo(); }
 
         private function playVideo(path:String):void {
-            fadeBgm(0); 
+            // Pause BGM instead of fading to 0
+            AudioManager.getInstance().pauseBgm();
             stopVideo(false);
 
             _videoContainer = new Sprite();
             var bg:Shape = new Shape();
-            bg.graphics.beginFill(0x000000, 0.85);
+            bg.graphics.beginFill(0x000000, 1.0);
             bg.graphics.drawRect(0, 0, stage.stageWidth, stage.stageHeight);
             _videoContainer.addChild(bg);
             
-            // Click on background area (not controls) to toggle play/pause
+            // Click on video area to toggle play/pause
             bg.addEventListener(MouseEvent.CLICK, onVideoAreaClick);
 
-            // Calculate video dimensions (16:9 aspect ratio with padding)
-            var videoWidth:Number = stage.stageWidth * 0.85;
-            var videoHeight:Number = videoWidth * (9/16);
-            var videoX:Number = (stage.stageWidth - videoWidth) / 2;
-            var videoY:Number = (stage.stageHeight - videoHeight) / 2 - 30; // Offset for controls
+            // Full screen video
+            var videoWidth:Number = stage.stageWidth;
+            var videoHeight:Number = stage.stageHeight;
+            var controlsY:Number = stage.stageHeight - 60; // Controls at bottom
             
             _video = new Video(videoWidth, videoHeight);
-            _video.x = videoX;
-            _video.y = videoY;
+            _video.x = 0;
+            _video.y = 0;
             _video.smoothing = true;
             _videoContainer.addChild(_video);
             stage.addChild(_videoContainer);
@@ -101,8 +100,8 @@ package ui {
             _video.attachNetStream(_ns);
             _ns.play(path);
             
-            // Create video controls
-            createVideoControls(videoX, videoY + videoHeight + 10, videoWidth);
+            // Create video controls at bottom of screen
+            createVideoControls(20, controlsY, videoWidth - 40);
             
             createBackButton();
             
@@ -262,25 +261,19 @@ package ui {
             _controlsVisible = true;
             
             if (resumeBgm) {
-                AudioManager.getInstance().play("Bgmlobby", 0, 9999);
-                fadeBgm(_prevBgVolume);
+                // Resume paused BGM or play if not started
+                if (!AudioManager.getInstance().resumeBgm()) {
+                    // If resume failed (no paused BGM), play from start
+                    var saveSystem:SaveSystem = SaveSystem.getInstance();
+                    var savedVolume:Number = 0.7; // default
+                    if (saveSystem.data && saveSystem.data.settings) {
+                        savedVolume = saveSystem.data.settings.masterVolume;
+                        if (isNaN(savedVolume)) savedVolume = 0.7;
+                    }
+                    AudioManager.getInstance().setMasterLevel(Math.round(savedVolume * 10));
+                    AudioManager.getInstance().playBgm("Bgmlobby");
+                }
             }
-        }
-
-        private function fadeBgm(targetVol:Number):void {
-            if (_fadeTimer) { _fadeTimer.stop(); _fadeTimer = null; }
-            if (targetVol == 0) _prevBgVolume = AudioManager.getInstance().getMusicVolume();
-            
-            _fadeTimer = new Timer(50, 8);
-            var step:Number = (targetVol - AudioManager.getInstance().getMusicVolume()) / 8;
-            
-            _fadeTimer.addEventListener(TimerEvent.TIMER, function(e:TimerEvent):void {
-                AudioManager.getInstance().setMusicVolume(AudioManager.getInstance().getMusicVolume() + step);
-            });
-            _fadeTimer.addEventListener(TimerEvent.TIMER_COMPLETE, function(e:TimerEvent):void {
-                AudioManager.getInstance().setMusicVolume(targetVol);
-            });
-            _fadeTimer.start();
         }
 
         private function createBackButton():void {

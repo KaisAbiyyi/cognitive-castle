@@ -305,6 +305,18 @@ package {
                 ServiceLocator.getInstance().register("AudioManager", audioManager);
             }
             
+            // Load saved settings and apply volume to AudioManager
+            var saveSystem:SaveSystem = SaveSystem.getInstance();
+            saveSystem.loadState();
+            if (saveSystem.data && saveSystem.data.settings) {
+                var savedMasterVolume:Number = saveSystem.data.settings.masterVolume;
+                if (!isNaN(savedMasterVolume) && savedMasterVolume >= 0 && savedMasterVolume <= 1) {
+                    var volumeLevel:int = Math.round(savedMasterVolume * 10);
+                    audioManager.setMasterLevel(volumeLevel);
+                    if (DEBUG) trace("[Main] Applied saved volume level: " + volumeLevel);
+                }
+            }
+            
             if (DEBUG) trace("[Main] AudioManager initialized");
             
             _mainMenu = new MainMenu();
@@ -485,6 +497,14 @@ package {
             if (_mainMenu) _mainMenu.show();
             var audioManager:AudioManager = AudioManager.getInstance();
             if (audioManager) {
+                // Restore saved volume before playing BGM
+                var saveSystem:SaveSystem = SaveSystem.getInstance();
+                if (saveSystem.data && saveSystem.data.settings) {
+                    var savedVolume:Number = saveSystem.data.settings.masterVolume;
+                    if (!isNaN(savedVolume) && savedVolume >= 0 && savedVolume <= 1) {
+                        audioManager.setMasterLevel(Math.round(savedVolume * 10));
+                    }
+                }
                 audioManager.playBgm("Bgmlobby");
             }
         }

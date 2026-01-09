@@ -3,6 +3,7 @@ package ui {
     import flash.events.*;
     import flash.net.URLRequest;
     import services.AudioManager;
+    import services.SaveSystem;
     import ui.components.VolumeDisplay;
     import ui.CustomCheckbox;
     import utils.TweenManager;
@@ -38,8 +39,24 @@ package ui {
         private function init(e:Event = null):void {
             removeEventListener(Event.ADDED_TO_STAGE, init);
             TweenManager.init();
-            AudioManager.getInstance().init();
+            
+            // Load saved volume level first (do NOT call AudioManager.init() as it resets volume)
+            loadSavedVolumeLevel();
+            
+            // Apply saved volume to AudioManager
+            AudioManager.getInstance().setMasterLevel(_currentLevel);
+            
             buildUI();
+        }
+        
+        private function loadSavedVolumeLevel():void {
+            var saveSystem:SaveSystem = SaveSystem.getInstance();
+            if (saveSystem.data && saveSystem.data.settings) {
+                var savedMasterVolume:Number = saveSystem.data.settings.masterVolume;
+                if (!isNaN(savedMasterVolume) && savedMasterVolume >= 0 && savedMasterVolume <= 1) {
+                    _currentLevel = Math.round(savedMasterVolume * 10);
+                }
+            }
         }
 
         private function buildUI():void {
@@ -50,6 +67,9 @@ package ui {
             // 2. Setup Volume Display
             _volumeDisplay = new VolumeDisplay();
             addChild(_volumeDisplay);
+            
+            // Initialize volume display with saved level
+            _volumeDisplay.update(_currentLevel);
 
             // Load Assets Bar
             loadBitmap(PATH_BAR_EMPTY, function(b:BitmapData):void { _volumeDisplay.setEmptyAsset(b); });
@@ -135,7 +155,20 @@ package ui {
                 AudioManager.getInstance().setMasterLevel(_currentLevel);
                 if(delta != 0) AudioManager.getInstance().playSfx(delta > 0 ? "ButtonIn" : "ButtonOut");
                 _volumeDisplay.update(_currentLevel);
+                
+                // Save volume setting to SaveSystem
+                saveVolumeLevel();
+                
                 dispatchEvent(new Event(SETTINGS_CHANGED));
+            }
+        }
+        
+        private function saveVolumeLevel():void {
+            var saveSystem:SaveSystem = SaveSystem.getInstance();
+            if (saveSystem.data && saveSystem.data.settings) {
+                saveSystem.data.settings.masterVolume = _currentLevel / 10;
+                saveSystem.data.settings.sfxVolume = _currentLevel / 10;
+                saveSystem.saveState();
             }
         }
 
