@@ -4,9 +4,10 @@ bin/*.swf
 bin/*.apk
 bin/*.exe
 bin/*.tmp
+bin/*.air
 bin-debug/
 bin-release/
-docs
+docs/
 # --- VS Code Settings (PENTING UNTUK TIM) ---
 # Karena launch.json berisi path absolut ke SDK komputer Kais,
 # file ini TIDAK BOLEH di-share via Git. Setiap orang harus setting sendiri.
@@ -21,10 +22,6 @@ docs
 .DS_Store
 Thumbs.db
 
-# --- Local History (Jika ada extension local history) ---
-.history/# Video files (too large for GitHub)
-assets/*.mp4
-bin/assets/*.mp4
 
 
 # Snyk Security Extension - AI Rules (auto-generated)
