@@ -2,6 +2,7 @@
 # Kita hanya mau source code, bukan hasil jadinya.
 bin/*.swf
 bin/*.apk
+bin/*apk
 bin/*.exe
 bin/*.tmp
 bin/*.air
