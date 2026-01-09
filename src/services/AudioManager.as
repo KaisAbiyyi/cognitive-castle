@@ -2,12 +2,14 @@ package services {
     
     import flash.media.Sound;
     import flash.media.SoundChannel;
+    import flash.media.SoundMixer;
     import flash.media.SoundTransform;
     import flash.net.URLRequest;
     import flash.events.Event;
     import flash.events.IOErrorEvent;
     import flash.utils.Dictionary;
     import flash.filesystem.File;
+    import services.SaveSystem;
     
     /**
      * AudioManager - Centralized audio management service.
@@ -60,6 +62,9 @@ package services {
         // Current sounds
         private var _currentBgm:Sound;
         private var _currentRepeatingSfx:Sound;
+        private var _currentBgmName:String = null;
+        private var _bgmPausePosition:Number = 0;
+        private var _isBgmPaused:Boolean = false;
         
         // Volume settings
         private var _sfxVolume:Number;
@@ -162,8 +167,21 @@ package services {
                 return false;
             }
             
-            // Stop current BGM if playing
-            stopBgm();
+            // If same BGM is already playing, don't restart
+            if (_currentBgmName == soundName && _bgmChannel && !_isBgmPaused) {
+                if (DEBUG) trace("[AudioManager] BGM '" + soundName + "' already playing, not restarting");
+                return true;
+            }
+            
+            // If same BGM is paused, resume it
+            if (_currentBgmName == soundName && _isBgmPaused) {
+                return resumeBgm();
+            }
+            
+            // Stop current BGM if playing different one
+            if (_currentBgmName != soundName) {
+                stopBgm();
+            }
             
             if (_bgmMuted) {
                 if (DEBUG) trace("[AudioManager] BGM muted, skipping: " + soundName);
@@ -177,6 +195,9 @@ package services {
             
             try {
                 _currentBgm = sound;
+                _currentBgmName = soundName;
+                _isBgmPaused = false;
+                _bgmPausePosition = 0;
                 var transform:SoundTransform = new SoundTransform(_bgmVolume);
                 _bgmChannel = sound.play(0, 0, transform);
                 
@@ -215,8 +236,55 @@ package services {
                 _bgmChannel = null;
             }
             _currentBgm = null;
+            _currentBgmName = null;
+            _isBgmPaused = false;
+            _bgmPausePosition = 0;
             
             if (DEBUG) trace("[AudioManager] BGM stopped");
+        }
+        
+        /**
+         * Pause background music (can be resumed later)
+         */
+        public function pauseBgm():void {
+            if (_bgmChannel && !_isBgmPaused) {
+                try {
+                    _bgmPausePosition = _bgmChannel.position;
+                    _bgmChannel.stop();
+                    _bgmChannel.removeEventListener(Event.SOUND_COMPLETE, onBgmComplete);
+                    _bgmChannel = null;
+                    _isBgmPaused = true;
+                    
+                    if (DEBUG) trace("[AudioManager] BGM paused at position: " + _bgmPausePosition);
+                } catch (error:Error) {
+                    if (DEBUG) trace("[AudioManager] Error pausing BGM: " + error.message);
+                }
+            }
+        }
+        
+        /**
+         * Resume paused background music
+         */
+        public function resumeBgm():Boolean {
+            if (_isBgmPaused && _currentBgm) {
+                try {
+                    var transform:SoundTransform = new SoundTransform(_bgmVolume);
+                    _bgmChannel = _currentBgm.play(_bgmPausePosition, 0, transform);
+                    
+                    if (_bgmChannel) {
+                        _bgmChannel.addEventListener(Event.SOUND_COMPLETE, onBgmComplete);
+                        _isBgmPaused = false;
+                        
+                        if (DEBUG) {
+                            trace("[AudioManager] BGM resumed from position: " + _bgmPausePosition);
+                        }
+                        return true;
+                    }
+                } catch (error:Error) {
+                    if (DEBUG) trace("[AudioManager] Error resuming BGM: " + error.message);
+                }
+            }
+            return false;
         }
         
         /**
@@ -318,8 +386,13 @@ package services {
                 _repeatingSfxChannel.soundTransform = transform;
             }
             
+            // Update global Flash volume for embedded/timeline sounds
+            var globalTransform:SoundTransform = new SoundTransform(_sfxVolume);
+            SoundMixer.soundTransform = globalTransform;
+            
             if (DEBUG) {
                 trace("[AudioManager] SFX volume set to " + (_sfxVolume * 100) + "%");
+                trace("[AudioManager] Global SoundMixer volume updated to " + (_sfxVolume * 100) + "%");
             }
         }
         
@@ -416,7 +489,19 @@ package services {
         // ========== LEGACY COMPATIBILITY ==========
 
         public function init():void {
-            setMasterLevel(10);
+            // Load saved volume from SaveSystem instead of resetting to max
+            var saveSystem:SaveSystem = SaveSystem.getInstance();
+            if (saveSystem.data && saveSystem.data.settings) {
+                var savedVolume:Number = saveSystem.data.settings.masterVolume;
+                if (!isNaN(savedVolume) && savedVolume >= 0 && savedVolume <= 1) {
+                    setMasterLevel(Math.round(savedVolume * 10));
+                    if (DEBUG) trace("[AudioManager] init() loaded saved volume: " + Math.round(savedVolume * 10));
+                    return;
+                }
+            }
+            // Fallback to default if no saved volume
+            setMasterLevel(7);
+            if (DEBUG) trace("[AudioManager] init() using default volume: 7");
         }
 
         public function play(name:String, startTime:Number = 0, loops:int = 0):SoundChannel {
@@ -466,6 +551,14 @@ package services {
             var volume:Number = Math.max(0, Math.min(10, level)) / 10;
             setSfxVolume(volume);
             setBgmVolume(volume);
+            
+            // Set global Flash volume for embedded/timeline sounds (buttons from Animate)
+            var globalTransform:SoundTransform = new SoundTransform(volume);
+            SoundMixer.soundTransform = globalTransform;
+            
+            if (DEBUG) {
+                trace("[AudioManager] Global volume (SoundMixer) set to " + (volume * 100) + "%");
+            }
         }
 
         public function setMusicVolume(volume:Number):void {

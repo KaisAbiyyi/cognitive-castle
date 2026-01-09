@@ -1,6 +1,7 @@
 package ui.components {
     import flash.display.*;
     import flash.events.*;
+    import flash.geom.Point;
     import flash.net.NetStream;
     import flash.text.*;
     import flash.utils.Timer;
@@ -224,7 +225,7 @@ package ui.components {
         
         private function updateSeekPosition(e:MouseEvent):void {
             var progressWidth:Number = _width - 180;
-            var localX:Number = _progressBar.globalToLocal(new flash.geom.Point(e.stageX, e.stageY)).x;
+            var localX:Number = _progressBar.globalToLocal(new Point(e.stageX, e.stageY)).x;
             _seekPosition = Math.max(0, Math.min(1, localX / progressWidth));
             updateProgressBar(_seekPosition);
         }
