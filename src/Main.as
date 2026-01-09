@@ -32,6 +32,7 @@ package {
     import ui.LessonsPanel;
     import ui.GameScreen;
     import ui.UpgradePopup;
+    import ui.ScreenContainer;
     
     /**
      * Main - Application Entry Point
@@ -81,6 +82,9 @@ package {
         private var _gameScreen:GameScreen;
         private var _upgradePopup:UpgradePopup;
         
+        // Screen container for 16:9 aspect ratio with borders
+        private var _screenContainer:ScreenContainer;
+        
         // Game State
         private var _isInGame:Boolean = false;
         private var _correctStreak:int = 0;
@@ -92,10 +96,16 @@ package {
         
         private function init(e:Event = null):void {
             removeEventListener(Event.ADDED_TO_STAGE, init);
-            stage.scaleMode = StageScaleMode.NO_SCALE;
-            stage.align = StageAlign.TOP_LEFT;
+            stage.scaleMode = StageScaleMode.SHOW_ALL;
+            stage.align = "";
             stage.addEventListener(Event.RESIZE, onResize);
-            StimulusConfig.updateForStageSize(stage.stageWidth, stage.stageHeight);
+            
+            // Initialize screen container for 16:9 aspect ratio with borders
+            _screenContainer = new ScreenContainer();
+            _screenContainer.initialize(stage.stageWidth, stage.stageHeight);
+            addChild(_screenContainer);
+            
+            StimulusConfig.updateForStageSize(_screenContainer.gameWidth, _screenContainer.gameHeight);
             
             playIntro();
         }
@@ -108,12 +118,14 @@ package {
         private function onIntroComplete():void { initializeMenu(); }
         
         private function layoutIntroVideo():void {
-            if (!_video) return;
-            var scale:Number = Math.max(stage.stageWidth / 1280, stage.stageHeight / 720);
+            if (!_video || !_screenContainer) return;
+            var gameW:Number = _screenContainer.gameWidth;
+            var gameH:Number = _screenContainer.gameHeight;
+            var scale:Number = Math.max(gameW / 1280, gameH / 720);
             _video.width = 1280 * scale;
             _video.height = 720 * scale;
-            _video.x = (stage.stageWidth - _video.width) / 2;
-            _video.y = (stage.stageHeight - _video.height) / 2;
+            _video.x = (gameW - _video.width) / 2;
+            _video.y = (gameH - _video.height) / 2;
         }
         
         private function checkSkip(e:Event):void {
@@ -128,14 +140,21 @@ package {
             _skipBtn = new Sprite();
             _skipBtn.buttonMode = true;
             
-            _skipBaseX = stage.stageWidth - (_skipBtnWidth + 20);
-            _skipBaseY = stage.stageHeight - (_skipBtnHeight + 20);
+            var gameW:Number = _screenContainer ? _screenContainer.gameWidth : stage.stageWidth;
+            var gameH:Number = _screenContainer ? _screenContainer.gameHeight : stage.stageHeight;
+            
+            _skipBaseX = gameW - (_skipBtnWidth + 20);
+            _skipBaseY = gameH - (_skipBtnHeight + 20);
             applySkipScale(_skipNormalScale);
             
             _skipBtn.addEventListener(MouseEvent.CLICK, function(e:Event):void { finishVideoPlayback(); });
             _skipBtn.addEventListener(MouseEvent.MOUSE_OVER, onSkipOver);
             _skipBtn.addEventListener(MouseEvent.MOUSE_OUT, onSkipOut);
-            addChild(_skipBtn);
+            if (_screenContainer) {
+                _screenContainer.addToGameArea(_skipBtn);
+            } else {
+                addChild(_skipBtn);
+            }
             
             var loader:Loader = new Loader();
             loader.contentLoaderInfo.addEventListener(Event.COMPLETE, function(e:Event):void {
@@ -198,7 +217,11 @@ package {
             
             _videoContainer = new Sprite();
             _videoContainer.addChild(_video);
-            addChild(_videoContainer);
+            if (_screenContainer) {
+                _screenContainer.addToGameArea(_videoContainer);
+            } else {
+                addChild(_videoContainer);
+            }
             layoutIntroVideo();
             
             var f:File = File.applicationDirectory.resolvePath(path);
@@ -234,13 +257,23 @@ package {
         }
 
         private function cleanupVideoVisuals():void {
-            if (_videoContainer && contains(_videoContainer)) removeChild(_videoContainer);
+            if (_videoContainer) {
+                if (_screenContainer && _screenContainer.gameAreaContains(_videoContainer)) {
+                    _screenContainer.removeFromGameArea(_videoContainer);
+                } else if (contains(_videoContainer)) {
+                    removeChild(_videoContainer);
+                }
+            }
             _videoContainer = null;
             _video = null;
             if (_skipBtn) {
                 _skipBtn.removeEventListener(MouseEvent.MOUSE_OVER, onSkipOver);
                 _skipBtn.removeEventListener(MouseEvent.MOUSE_OUT, onSkipOut);
-                if (contains(_skipBtn)) removeChild(_skipBtn);
+                if (_screenContainer && _screenContainer.gameAreaContains(_skipBtn)) {
+                    _screenContainer.removeFromGameArea(_skipBtn);
+                } else if (contains(_skipBtn)) {
+                    removeChild(_skipBtn);
+                }
             }
             _skipBtn = null;
         }
@@ -319,20 +352,33 @@ package {
             
             if (DEBUG) trace("[Main] AudioManager initialized");
             
+            // Use screen container dimensions for UI
+            var gameW:Number = _screenContainer ? _screenContainer.gameWidth : stage.stageWidth;
+            var gameH:Number = _screenContainer ? _screenContainer.gameHeight : stage.stageHeight;
+            
             _mainMenu = new MainMenu();
             _settingsMenu = new SettingsMenu();
             _aboutUs = new AboutUsPanel();
             _lessons = new LessonsPanel();
             
-            _mainMenu.initialize(stage.stageWidth, stage.stageHeight);
-            _settingsMenu.initialize(stage.stageWidth, stage.stageHeight);
-            _aboutUs.initialize(stage.stageWidth, stage.stageHeight);
-            _lessons.initialize(stage.stageWidth, stage.stageHeight);
+            _mainMenu.initialize(gameW, gameH);
+            _settingsMenu.initialize(gameW, gameH);
+            _aboutUs.initialize(gameW, gameH);
+            _lessons.initialize(gameW, gameH);
             
-            addChild(_mainMenu);
-            addChild(_settingsMenu);
-            addChild(_aboutUs);
-            addChild(_lessons);
+            // Add menus to screen container game area
+            if (_screenContainer) {
+                _screenContainer.addToGameArea(_mainMenu);
+                _screenContainer.addToGameArea(_settingsMenu);
+                _screenContainer.addToGameArea(_aboutUs);
+                _screenContainer.addToGameArea(_lessons);
+                _screenContainer.bringBordersToFront();
+            } else {
+                addChild(_mainMenu);
+                addChild(_settingsMenu);
+                addChild(_aboutUs);
+                addChild(_lessons);
+            }
             
             _settingsMenu.hide();
             _aboutUs.hide();
@@ -412,6 +458,10 @@ package {
         private function initializeGame(savedState:CastleState = null, savedCastleScale:Number = NaN):void {
             _isInGame = true;
             
+            // Use screen container dimensions
+            var gameW:Number = _screenContainer ? _screenContainer.gameWidth : stage.stageWidth;
+            var gameH:Number = _screenContainer ? _screenContainer.gameHeight : stage.stageHeight;
+            
             var progressionManager:ProgressionManager = ProgressionManager.getInstance();
             if (savedState) {
                 progressionManager.initializeWithState(savedState);
@@ -420,31 +470,44 @@ package {
             }
             
             _gameScreen = new GameScreen();
-            _gameScreen.initialize(stage.stageWidth, stage.stageHeight);
+            _gameScreen.initialize(gameW, gameH);
             if (savedState) {
                 _gameScreen.applySavedState(savedState, savedCastleScale);
             }
             _gameScreen.addEventListener(GameScreen.UPGRADE_CLICKED, onUpgradeClicked);
             _gameScreen.addEventListener("goToMainMenu", onGoToMainMenu);
             _gameScreen.addEventListener("retryGame", onRetryGame);
-            addChild(_gameScreen);
             
             _upgradePopup = new UpgradePopup();
-            _upgradePopup.initialize(stage.stageWidth, stage.stageHeight);
+            _upgradePopup.initialize(gameW, gameH);
             _upgradePopup.addEventListener(UpgradePopup.CHALLENGE_STARTED, onChallengeStarted);
             _upgradePopup.addEventListener(UpgradePopup.CHALLENGE_SUCCESS, onChallengeSuccess);
             _upgradePopup.addEventListener(UpgradePopup.CHALLENGE_FAIL, onChallengeFail);
             _upgradePopup.addEventListener(UpgradePopup.POPUP_CLOSED, onPopupClosed);
-            addChild(_upgradePopup);
             
-            EffectsManager.getInstance().setParent(this);
+            // Add to screen container game area
+            if (_screenContainer) {
+                _screenContainer.addToGameArea(_gameScreen);
+                _screenContainer.addToGameArea(_upgradePopup);
+                _screenContainer.bringBordersToFront();
+            } else {
+                addChild(_gameScreen);
+                addChild(_upgradePopup);
+            }
+            
+            EffectsManager.getInstance().setParent(_screenContainer ? _screenContainer.gameArea : this);
         }
         
         private function onUpgradeClicked(event:Event):void {
             if (DEBUG) trace("[Main] Upgrade clicked - showing upgrade popup");
             if (_gameScreen) _gameScreen.setUpgradeButtonEnabled(false);
             
-            if (_upgradePopup && contains(_upgradePopup)) {
+            if (_screenContainer && _upgradePopup) {
+                var gameArea:Sprite = _screenContainer.gameArea;
+                if (gameArea.contains(_upgradePopup)) {
+                    gameArea.setChildIndex(_upgradePopup, gameArea.numChildren - 1);
+                }
+            } else if (_upgradePopup && contains(_upgradePopup)) {
                 setChildIndex(_upgradePopup, numChildren - 1);
             }
             
@@ -528,7 +591,11 @@ package {
                 _gameScreen.removeEventListener(GameScreen.UPGRADE_CLICKED, onUpgradeClicked);
                 _gameScreen.removeEventListener("goToMainMenu", onGoToMainMenu);
                 _gameScreen.removeEventListener("retryGame", onRetryGame);
-                if (contains(_gameScreen)) removeChild(_gameScreen);
+                if (_screenContainer && _screenContainer.gameAreaContains(_gameScreen)) {
+                    _screenContainer.removeFromGameArea(_gameScreen);
+                } else if (contains(_gameScreen)) {
+                    removeChild(_gameScreen);
+                }
                 _gameScreen = null;
             }
             
@@ -537,7 +604,11 @@ package {
                 _upgradePopup.removeEventListener(UpgradePopup.CHALLENGE_SUCCESS, onChallengeSuccess);
                 _upgradePopup.removeEventListener(UpgradePopup.CHALLENGE_FAIL, onChallengeFail);
                 _upgradePopup.removeEventListener(UpgradePopup.POPUP_CLOSED, onPopupClosed);
-                if (contains(_upgradePopup)) removeChild(_upgradePopup);
+                if (_screenContainer && _screenContainer.gameAreaContains(_upgradePopup)) {
+                    _screenContainer.removeFromGameArea(_upgradePopup);
+                } else if (contains(_upgradePopup)) {
+                    removeChild(_upgradePopup);
+                }
                 _upgradePopup = null;
             }
             
@@ -546,25 +617,39 @@ package {
         }
         
         private function onResize(e:Event):void {
-            StimulusConfig.updateForStageSize(stage.stageWidth, stage.stageHeight);
+            // Update screen container first
+            if (_screenContainer) {
+                _screenContainer.onResize(stage.stageWidth, stage.stageHeight);
+            }
+            
+            // Use game area dimensions for content
+            var gameW:Number = _screenContainer ? _screenContainer.gameWidth : stage.stageWidth;
+            var gameH:Number = _screenContainer ? _screenContainer.gameHeight : stage.stageHeight;
+            
+            StimulusConfig.updateForStageSize(gameW, gameH);
             
             if (_video) {
                 layoutIntroVideo();
             }
             if (_skipBtn) {
-                _skipBaseX = stage.stageWidth - (_skipBtnWidth + 20);
-                _skipBaseY = stage.stageHeight - (_skipBtnHeight + 20);
+                _skipBaseX = gameW - (_skipBtnWidth + 20);
+                _skipBaseY = gameH - (_skipBtnHeight + 20);
                 applySkipScale(_skipBtn.scaleX);
             }
             
-            if (_mainMenu) _mainMenu.resize(stage.stageWidth, stage.stageHeight);
-            if (_settingsMenu) _settingsMenu.resize(stage.stageWidth, stage.stageHeight);
-            if (_aboutUs) _aboutUs.resize(stage.stageWidth, stage.stageHeight);
-            if (_lessons) _lessons.initialize(stage.stageWidth, stage.stageHeight);
+            if (_mainMenu) _mainMenu.resize(gameW, gameH);
+            if (_settingsMenu) _settingsMenu.resize(gameW, gameH);
+            if (_aboutUs) _aboutUs.resize(gameW, gameH);
+            if (_lessons) _lessons.initialize(gameW, gameH);
             
             if (_isInGame) {
-                if (_gameScreen) _gameScreen.onResize(stage.stageWidth, stage.stageHeight);
-                if (_upgradePopup) _upgradePopup.onResize(stage.stageWidth, stage.stageHeight);
+                if (_gameScreen) _gameScreen.onResize(gameW, gameH);
+                if (_upgradePopup) _upgradePopup.onResize(gameW, gameH);
+            }
+            
+            // Bring borders to front after resize
+            if (_screenContainer) {
+                _screenContainer.bringBordersToFront();
             }
         }
     }

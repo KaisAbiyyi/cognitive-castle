@@ -17,11 +17,11 @@
 	</name>
 -->
 <application xmlns="http://ns.adobe.com/air/application/51.2">
-  <id>CognitiveCastleFrontend</id>
+  <id>CognitiveCastle</id>
   <versionNumber>1.0</versionNumber>
-  <filename>CognitiveCastleFrontend</filename>
+  <filename>CognitiveCastle</filename>
   <description/>
-  <name>CognitiveCastleFrontend</name>
+  <name>CognitiveCastle</name>
   <copyright/>
   <initialWindow>
     <content>CognitiveCastleFrontend.swf</content>
@@ -31,12 +31,14 @@
     <fullScreen>true</fullScreen>
     <aspectRatio>landscape</aspectRatio>
     <renderMode>auto</renderMode>
-    <autoOrients>false</autoOrients>
+    <autoOrients>true</autoOrients>
     <maximizable>true</maximizable>
     <minimizable>true</minimizable>
     <resizable>true</resizable>
   </initialWindow>
-  <icon/>
+  <icon>
+    
+    <image48x48>AppIconsForPublish/icons.png</image48x48></icon>
   <customUpdateUI>false</customUpdateUI>
   <allowBrowserInvocation>false</allowBrowserInvocation>
   <versionLabel/>
